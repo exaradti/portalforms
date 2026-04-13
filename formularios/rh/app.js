@@ -19,8 +19,6 @@ const erros = {
   descricao: document.getElementById("erro-descricao"),
 };
 
-const btnSubmit = form.querySelector('button[type="submit"]');
-
 function limparErro(campo, nomeErro) {
   campo.classList.remove("input-error");
   erros[nomeErro].textContent = "";
@@ -71,20 +69,6 @@ function validarCPF(cpf) {
 
 function validarEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-}
-
-async function lerRespostaSegura(resp) {
-  const contentType = resp.headers.get("content-type") || "";
-
-  if (contentType.includes("application/json")) {
-    return await resp.json();
-  }
-
-  const texto = await resp.text();
-  return {
-    ok: false,
-    message: texto || "Resposta inválida do servidor.",
-  };
 }
 
 campos.cpf.addEventListener("input", (e) => {
@@ -148,7 +132,7 @@ form.addEventListener("submit", async (e) => {
 
   if (!valido) {
     msg.textContent = "Corrija os campos obrigatórios antes de enviar.";
-    msg.className = "msg error";
+    msg.classList.add("error");
     return;
   }
 
@@ -161,9 +145,6 @@ form.addEventListener("submit", async (e) => {
     descricao,
   };
 
-  btnSubmit.disabled = true;
-  btnSubmit.textContent = "Enviando...";
-
   try {
     const resp = await fetch("/api/rh", {
       method: "POST",
@@ -173,20 +154,17 @@ form.addEventListener("submit", async (e) => {
       body: JSON.stringify(payload),
     });
 
-    const result = await lerRespostaSegura(resp);
+    const result = await resp.json();
 
     if (!resp.ok || !result.ok) {
       throw new Error(result.message || "Erro ao enviar formulário.");
     }
 
-    form.reset();
     msg.textContent = result.message || "Solicitação enviada com sucesso.";
-    msg.className = "msg success";
+    msg.classList.add("success");
+    form.reset();
   } catch (error) {
     msg.textContent = error.message || "Erro ao enviar solicitação.";
-    msg.className = "msg error";
-  } finally {
-    btnSubmit.disabled = false;
-    btnSubmit.textContent = "Enviar solicitação";
+    msg.classList.add("error");
   }
 });
