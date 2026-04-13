@@ -3,13 +3,11 @@ export async function onRequestPost(context) {
     const data = await context.request.json();
 
     const nome = (data.nome || "").trim();
-    const cpf = (data.cpf || "").trim();
-    const setor = (data.setor || "").trim();
     const email = (data.email || "").trim();
     const tipo = (data.tipo || "").trim();
     const descricao = (data.descricao || "").trim();
 
-    if (!nome || !cpf || !setor || !email || !tipo || !descricao) {
+    if (!nome || !email || !tipo) {
       return Response.json(
         { ok: false, message: "Preencha todos os campos obrigatórios." },
         { status: 400 }
@@ -20,13 +18,11 @@ export async function onRequestPost(context) {
 Nova solicitação ao RH
 
 Nome: ${nome}
-CPF: ${cpf}
-Setor: ${setor}
 E-mail: ${email}
 Tipo de solicitação: ${tipo}
 
 Descrição:
-${descricao}
+${descricao || "Não informada"}
     `.trim();
 
     const emailResp = await fetch("https://api.resend.com/emails", {
