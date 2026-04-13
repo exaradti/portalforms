@@ -4,8 +4,6 @@ const btnSubmit = form.querySelector('button[type="submit"]');
 
 const campos = {
   nome: document.getElementById("nome"),
-  cpf: document.getElementById("cpf"),
-  setor: document.getElementById("setor"),
   email: document.getElementById("email"),
   tipo: document.getElementById("tipo"),
   descricao: document.getElementById("descricao"),
@@ -13,8 +11,6 @@ const campos = {
 
 const erros = {
   nome: document.getElementById("erro-nome"),
-  cpf: document.getElementById("erro-cpf"),
-  setor: document.getElementById("erro-setor"),
   email: document.getElementById("erro-email"),
   tipo: document.getElementById("erro-tipo"),
   descricao: document.getElementById("erro-descricao"),
@@ -37,45 +33,6 @@ function mostrarErro(campo, nomeErro, mensagem) {
   erros[nomeErro].textContent = mensagem;
 }
 
-function limparCPF(valor) {
-  return valor.replace(/\D/g, "");
-}
-
-function formatarCPF(valor) {
-  const numeros = limparCPF(valor).slice(0, 11);
-
-  if (numeros.length <= 3) return numeros;
-  if (numeros.length <= 6) return `${numeros.slice(0, 3)}.${numeros.slice(3)}`;
-  if (numeros.length <= 9) return `${numeros.slice(0, 3)}.${numeros.slice(3, 6)}.${numeros.slice(6)}`;
-  return `${numeros.slice(0, 3)}.${numeros.slice(3, 6)}.${numeros.slice(6, 9)}-${numeros.slice(9, 11)}`;
-}
-
-function validarCPF(cpf) {
-  const cpfLimpo = limparCPF(cpf);
-
-  if (cpfLimpo.length !== 11) return false;
-  if (/^(\d)\1{10}$/.test(cpfLimpo)) return false;
-
-  let soma = 0;
-  for (let i = 0; i < 9; i++) {
-    soma += Number(cpfLimpo.charAt(i)) * (10 - i);
-  }
-
-  let resto = (soma * 10) % 11;
-  if (resto === 10) resto = 0;
-  if (resto !== Number(cpfLimpo.charAt(9))) return false;
-
-  soma = 0;
-  for (let i = 0; i < 10; i++) {
-    soma += Number(cpfLimpo.charAt(i)) * (11 - i);
-  }
-
-  resto = (soma * 10) % 11;
-  if (resto === 10) resto = 0;
-
-  return resto === Number(cpfLimpo.charAt(10));
-}
-
 function validarEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
@@ -94,10 +51,6 @@ async function lerRespostaSegura(resp) {
   };
 }
 
-campos.cpf.addEventListener("input", (e) => {
-  e.target.value = formatarCPF(e.target.value);
-});
-
 Object.entries(campos).forEach(([nome, campo]) => {
   campo.addEventListener("input", () => limparErro(campo, nome));
   campo.addEventListener("change", () => limparErro(campo, nome));
@@ -111,27 +64,12 @@ form.addEventListener("submit", async (e) => {
   let valido = true;
 
   const nome = campos.nome.value.trim();
-  const cpf = campos.cpf.value.trim();
-  const setor = campos.setor.value.trim();
   const email = campos.email.value.trim();
   const tipo = campos.tipo.value.trim();
   const descricao = campos.descricao.value.trim();
 
   if (!nome) {
     mostrarErro(campos.nome, "nome", "Informe o nome completo.");
-    valido = false;
-  }
-
-  if (!cpf) {
-    mostrarErro(campos.cpf, "cpf", "Informe o CPF.");
-    valido = false;
-  } else if (!validarCPF(cpf)) {
-    mostrarErro(campos.cpf, "cpf", "Informe um CPF válido.");
-    valido = false;
-  }
-
-  if (!setor) {
-    mostrarErro(campos.setor, "setor", "Informe o setor.");
     valido = false;
   }
 
@@ -148,11 +86,6 @@ form.addEventListener("submit", async (e) => {
     valido = false;
   }
 
-  if (!descricao) {
-    mostrarErro(campos.descricao, "descricao", "Descreva a solicitação.");
-    valido = false;
-  }
-
   if (!valido) {
     msg.textContent = "Corrija os campos obrigatórios antes de enviar.";
     msg.className = "msg error";
@@ -161,8 +94,6 @@ form.addEventListener("submit", async (e) => {
 
   const payload = {
     nome,
-    cpf: limparCPF(cpf),
-    setor,
     email,
     tipo,
     descricao,
