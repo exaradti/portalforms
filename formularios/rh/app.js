@@ -1,5 +1,6 @@
 const form = document.getElementById("formRH");
 const msg = document.getElementById("msg");
+const btnSubmit = form.querySelector('button[type="submit"]');
 
 const campos = {
   nome: document.getElementById("nome"),
@@ -19,12 +20,19 @@ const erros = {
   descricao: document.getElementById("erro-descricao"),
 };
 
+function limparMensagem() {
+  msg.textContent = "";
+  msg.className = "msg";
+}
+
 function limparErro(campo, nomeErro) {
+  if (!campo || !erros[nomeErro]) return;
   campo.classList.remove("input-error");
   erros[nomeErro].textContent = "";
 }
 
 function mostrarErro(campo, nomeErro, mensagem) {
+  if (!campo || !erros[nomeErro]) return;
   campo.classList.add("input-error");
   erros[nomeErro].textContent = mensagem;
 }
@@ -64,11 +72,26 @@ function validarCPF(cpf) {
 
   resto = (soma * 10) % 11;
   if (resto === 10) resto = 0;
+
   return resto === Number(cpfLimpo.charAt(10));
 }
 
 function validarEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+async function lerRespostaSegura(resp) {
+  const contentType = resp.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return await resp.json();
+  }
+
+  const texto = await resp.text();
+  return {
+    ok: false,
+    message: texto || "Resposta inválida do servidor.",
+  };
 }
 
 campos.cpf.addEventListener("input", (e) => {
@@ -83,9 +106,9 @@ Object.entries(campos).forEach(([nome, campo]) => {
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
+  limparMensagem();
+
   let valido = true;
-  msg.textContent = "";
-  msg.className = "msg";
 
   const nome = campos.nome.value.trim();
   const cpf = campos.cpf.value.trim();
@@ -132,7 +155,7 @@ form.addEventListener("submit", async (e) => {
 
   if (!valido) {
     msg.textContent = "Corrija os campos obrigatórios antes de enviar.";
-    msg.classList.add("error");
+    msg.className = "msg error";
     return;
   }
 
@@ -145,6 +168,9 @@ form.addEventListener("submit", async (e) => {
     descricao,
   };
 
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = "Enviando...";
+
   try {
     const resp = await fetch("/api/rh", {
       method: "POST",
@@ -154,17 +180,24 @@ form.addEventListener("submit", async (e) => {
       body: JSON.stringify(payload),
     });
 
-    const result = await resp.json();
+    const result = await lerRespostaSegura(resp);
 
     if (!resp.ok || !result.ok) {
-      throw new Error(result.message || "Erro ao enviar formulário.");
+      throw new Error(result.message || "Erro ao enviar solicitação.");
     }
 
-    msg.textContent = result.message || "Solicitação enviada com sucesso.";
-    msg.classList.add("success");
     form.reset();
+    Object.entries(campos).forEach(([nomeCampo, campo]) => {
+      limparErro(campo, nomeCampo);
+    });
+
+    msg.textContent = result.message || "Solicitação enviada com sucesso.";
+    msg.className = "msg success";
   } catch (error) {
     msg.textContent = error.message || "Erro ao enviar solicitação.";
-    msg.classList.add("error");
+    msg.className = "msg error";
+  } finally {
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = "Enviar solicitação";
   }
 });
