@@ -5,6 +5,7 @@ const listaArquivos = document.getElementById("listaArquivos");
 const msg = document.getElementById("msg");
 const erroDescricao = document.getElementById("erro-descricao");
 const btnSubmit = form.querySelector('button[type="submit"]');
+const btnReset = form.querySelector('button[type="reset"]');
 
 const MAX_ARQUIVOS = 5;
 const MAX_MB_POR_ARQUIVO = 10;
@@ -93,10 +94,9 @@ function renderizarListaArquivos() {
   const validacao = validarArquivos(Array.from(provas.files));
 
   if (!validacao.ok) {
-    limparMensagem();
-    msg.textContent = validacao.message;
-    msg.classList.add("error");
     provas.value = "";
+    msg.textContent = validacao.message;
+    msg.className = "msg error";
     return;
   }
 
@@ -125,6 +125,14 @@ async function lerRespostaSegura(resp) {
   };
 }
 
+function resetVisualForm() {
+  limparErro();
+  listaArquivos.innerHTML = "";
+  provas.value = "";
+  btnSubmit.disabled = false;
+  btnSubmit.textContent = "Enviar denúncia";
+}
+
 descricao.addEventListener("input", limparErro);
 
 provas.addEventListener("change", () => {
@@ -132,15 +140,17 @@ provas.addEventListener("change", () => {
   renderizarListaArquivos();
 });
 
-form.addEventListener("reset", () => {
-  setTimeout(() => {
-    limparErro();
-    limparMensagem();
-    listaArquivos.innerHTML = "";
-    btnSubmit.disabled = false;
-    btnSubmit.textContent = "Enviar denúncia";
-  }, 0);
-});
+if (btnReset) {
+  btnReset.addEventListener("click", () => {
+    setTimeout(() => {
+      limparErro();
+      limparMensagem();
+      listaArquivos.innerHTML = "";
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = "Enviar denúncia";
+    }, 0);
+  });
+}
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -154,7 +164,7 @@ form.addEventListener("submit", async (e) => {
   if (!descricaoValor) {
     mostrarErro("Descreva a situação antes de enviar.");
     msg.textContent = "Preencha os campos obrigatórios antes de enviar.";
-    msg.classList.add("error");
+    msg.className = "msg error";
     return;
   }
 
@@ -162,7 +172,7 @@ form.addEventListener("submit", async (e) => {
 
   if (!validacaoArquivos.ok) {
     msg.textContent = validacaoArquivos.message;
-    msg.classList.add("error");
+    msg.className = "msg error";
     return;
   }
 
@@ -183,12 +193,14 @@ form.addEventListener("submit", async (e) => {
       throw new Error(result.message || "Erro ao enviar denúncia.");
     }
 
-    msg.textContent = result.message || "Denúncia enviada com sucesso.";
-    msg.classList.add("success");
     form.reset();
+    resetVisualForm();
+
+    msg.textContent = result.message || "Denúncia enviada com sucesso.";
+    msg.className = "msg success";
   } catch (error) {
     msg.textContent = error.message || "Erro ao enviar denúncia.";
-    msg.classList.add("error");
+    msg.className = "msg error";
   } finally {
     btnSubmit.disabled = false;
     btnSubmit.textContent = "Enviar denúncia";
