@@ -2,7 +2,12 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const config = window.SUPABASE_CONFIG || {};
 
-if (!config.url || !config.anonKey || config.url.includes("SEU-PROJETO") || config.anonKey.includes("SUA_SUPABASE")) {
+if (
+  !config.url ||
+  !config.anonKey ||
+  config.url.includes("SEU-PROJETO") ||
+  config.anonKey.includes("SUA_SUPABASE")
+) {
   console.warn("Supabase não configurado em /assets/supabase-config.js");
 }
 
@@ -20,13 +25,31 @@ export async function getSession() {
   return data.session;
 }
 
+// 🔥 CORREÇÃO AQUI
+function buildRedirectPath(pathname) {
+  if (!pathname) return "/formularios/informatica/index.html";
+
+  let path = pathname.replace(/\/+$/, ""); // remove barra final
+
+  if (!path.endsWith(".html")) {
+    path += "/index.html";
+  }
+
+  return path;
+}
+
 export async function requireAuth(redirectTo) {
   const session = await getSession();
+
   if (!session) {
-    const destino = encodeURIComponent(redirectTo || window.location.pathname);
+    const basePath = redirectTo || window.location.pathname;
+    const destinoCorrigido = buildRedirectPath(basePath);
+    const destino = encodeURIComponent(destinoCorrigido);
+
     window.location.href = `/formularios/informatica/login/index.html?redirect=${destino}`;
     return null;
   }
+
   return session;
 }
 
@@ -39,7 +62,9 @@ export async function signOut() {
 }
 
 export function onAuthChange(callback) {
-  return supabase.auth.onAuthStateChange((_event, session) => callback(session));
+  return supabase.auth.onAuthStateChange((_event, session) =>
+    callback(session)
+  );
 }
 
 export async function getAccessToken() {
@@ -63,11 +88,13 @@ export function getUserDisplayName(session) {
   const user = session?.user;
   if (!user) return "Usuário autenticado";
 
-  return user.user_metadata?.full_name
-    || user.user_metadata?.name
-    || user.user_metadata?.display_name
-    || user.email
-    || "Usuário autenticado";
+  return (
+    user.user_metadata?.full_name ||
+    user.user_metadata?.name ||
+    user.user_metadata?.display_name ||
+    user.email ||
+    "Usuário autenticado"
+  );
 }
 
 export function renderUserDisplayName(selector, session) {
@@ -110,11 +137,7 @@ export function setupUserMenu({
 
     button.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (dropdown.hidden) {
-        openMenu();
-      } else {
-        closeMenu();
-      }
+      dropdown.hidden ? openMenu() : closeMenu();
     });
 
     document.addEventListener("click", (event) => {
