@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recuperar senha | Formulários Informática</title>
+  <meta name="description" content="Solicitação de recuperação de senha para a área de Informática.">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero__logo-wrap">
+        <img src="/assets/logo-grupo.png" alt="Logos Radiológica e Examina" class="hero__logo">
+      </div>
+      <div class="hero__content">
+        <span class="hero__eyebrow">Formulários Informática</span>
+        <h1>Recuperar senha</h1>
+        <p>Informe seu e-mail para receber o link de redefinição de senha.</p>
+        <div class="page-actions">
+          <a href="/formularios/informatica/login/index.html" class="btn-link">← Voltar ao login</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="login-shell" aria-labelledby="titulo-recuperar-senha">
+        <div class="login-card">
+          <div class="login-card__header">
+            <h2 id="titulo-recuperar-senha">Enviar link de recuperação</h2>
+            <p class="helper-text">Use o e-mail cadastrado no acesso da Informática.</p>
+          </div>
+
+          <form id="forgotPasswordForm" class="login-form" novalidate>
+            <div class="field">
+              <label for="email">E-mail</label>
+              <input type="email" id="email" name="email" placeholder="voce@empresa.com.br" required>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn-submit">Enviar link</button>
+              <a href="/formularios/informatica/login/index.html" class="btn-secondary">Cancelar</a>
+            </div>
+
+            <div id="mensagemForgot" class="form-message" aria-live="polite"></div>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>© 2026 Grupo Examina e Radiológica</p>
+    </footer>
+  </div>
+
+  <script src="/assets/supabase-config.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
