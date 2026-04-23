@@ -9,12 +9,11 @@ import {
 const loading = document.getElementById('loadingAuth');
 const content = document.getElementById('conteudoProtegido');
 const mensagemTela = document.getElementById('mensagemTela');
-const resumoUsuarios = document.getElementById('resumoUsuarios');
+const resumoResultados = document.getElementById('resumoResultados');
 const tbodyUsuarios = document.getElementById('tbodyUsuarios');
-const formCriarUsuario = document.getElementById('formCriarUsuario');
-const btnCriarUsuario = document.getElementById('btnCriarUsuario');
-const formFiltrosUsuarios = document.getElementById('formFiltrosUsuarios');
-const btnLimparUsuarios = document.getElementById('btnLimparUsuarios');
+const formFiltros = document.getElementById('formFiltros');
+const btnLimparFiltros = document.getElementById('btnLimparFiltros');
+const formNovoUsuario = document.getElementById('formNovoUsuario');
 
 function mostrarMensagem(texto, tipo) {
   mensagemTela.textContent = texto;
@@ -26,20 +25,26 @@ function formataData(valor) {
   if (!valor) return '-';
   const data = new Date(valor);
   if (Number.isNaN(data.getTime())) return '-';
-  return `${data.toLocaleDateString('pt-BR')} ${data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+
+  return `${data.toLocaleDateString('pt-BR')} ${data.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit'
+  })}`;
 }
 
-function getBadgeClass(valor, tipo) {
-  return valor ? `row-badge--${tipo === 'gestao' ? 'com-gestao' : 'ativo'}` : `row-badge--${tipo === 'gestao' ? 'sem-gestao' : 'inativo'}`;
+function limparMensagem() {
+  mostrarMensagem('', '');
 }
 
 function getQueryString() {
-  const formData = new FormData(formFiltrosUsuarios);
+  const formData = new FormData(formFiltros);
   const params = new URLSearchParams();
 
   for (const [chave, valor] of formData.entries()) {
     const texto = String(valor).trim();
-    if (texto) params.set(chave, texto);
+    if (texto) {
+      params.set(chave, texto);
+    }
   }
 
   return params.toString();
@@ -58,7 +63,10 @@ async function validarPermissaoTela() {
     }
   });
 
-  const resultado = await resposta.json().catch(() => ({ ok: false, message: 'Resposta inválida do servidor.' }));
+  const resultado = await resposta.json().catch(() => ({
+    ok: false,
+    message: 'Resposta inválida do servidor.'
+  }));
 
   if (resposta.status === 403) {
     window.location.href = '/formularios/informatica/index.html';
@@ -72,33 +80,94 @@ async function validarPermissaoTela() {
   return true;
 }
 
+async function carregarUsuarios() {
+  const accessToken = await getAccessToken();
+  if (!accessToken) {
+    window.location.href = `/formularios/informatica/login/index.html?redirect=${encodeURIComponent(window.location.pathname)}`;
+    return;
+  }
+
+  limparMensagem();
+  resumoResultados.textContent = 'Carregando usuários...';
+  tbodyUsuarios.innerHTML = '';
+
+  try {
+    const resposta = await fetch(`/api/gestao-usuarios?${getQueryString()}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    const resultado = await resposta.json().catch(() => ({
+      ok: false,
+      message: 'Resposta inválida do servidor.'
+    }));
+
+    if (resposta.status === 403) {
+      throw new Error(resultado.message || 'Acesso não autorizado à gestão de usuários.');
+    }
+
+    if (!resposta.ok || !resultado.ok) {
+      throw new Error(resultado.message || 'Erro ao carregar usuários.');
+    }
+
+    const usuarios = Array.isArray(resultado.usuarios) ? resultado.usuarios : [];
+    resumoResultados.textContent = `${usuarios.length} usuário(s) localizado(s).`;
+
+    if (!usuarios.length) {
+      tbodyUsuarios.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum usuário encontrado para os filtros informados.</td></tr>';
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    usuarios.forEach((usuario) => {
+      fragment.appendChild(criarLinhaUsuario(usuario));
+    });
+
+    tbodyUsuarios.appendChild(fragment);
+  } catch (error) {
+    resumoResultados.textContent = 'Não foi possível carregar os usuários.';
+    tbodyUsuarios.innerHTML = '<tr><td colspan="6" class="empty-state">Falha ao carregar os usuários.</td></tr>';
+    mostrarMensagem(error.message || 'Erro ao consultar usuários.', 'error');
+  }
+}
+
 function criarLinhaUsuario(usuario) {
   const tr = document.createElement('tr');
-  const nomeAtual = usuario.nome || usuario.email || '-';
 
   tr.innerHTML = `
     <td>
-      <strong>${nomeAtual}</strong>
-      <div class="row-meta">ID: ${usuario.id}</div>
+      <strong>${usuario.nome || '-'}</strong>
+      <div class="row-meta">ID: ${usuario.id || '-'}</div>
     </td>
     <td>
       <strong>${usuario.email || '-'}</strong>
       <div class="row-meta">Criado em: ${formataData(usuario.created_at)}</div>
     </td>
     <td>
-      <span class="row-badge ${getBadgeClass(usuario.ativo, 'ativo')}">${usuario.ativo ? 'Ativo' : 'Inativo'}</span>
+      <span class="row-badge row-badge--${usuario.ativo ? 'registrado' : 'pendente'}">
+        ${usuario.ativo ? 'Ativo' : 'Inativo'}
+      </span>
     </td>
     <td>
-      <span class="row-badge ${getBadgeClass(usuario.acesso_gestao, 'gestao')}">${usuario.acesso_gestao ? 'Com acesso' : 'Sem acesso'}</span>
+      <span class="row-badge row-badge--${usuario.acesso_gestao ? 'registrado' : 'pendente'}">
+        ${usuario.acesso_gestao ? 'Com acesso' : 'Sem acesso'}
+      </span>
     </td>
     <td>${formataData(usuario.last_sign_in_at)}</td>
     <td>
       <div class="row-edit">
-        <input type="text" data-role="nome" value="${nomeAtual}" placeholder="Nome do usuário">
-        <input type="text" data-role="senha" value="" placeholder="Nova senha (opcional)">
-        <div class="row-checks">
-          <label><input type="checkbox" data-role="ativo" ${usuario.ativo ? 'checked' : ''}> Usuário ativo no portal</label>
-          <label><input type="checkbox" data-role="gestao" ${usuario.acesso_gestao ? 'checked' : ''}> Acesso à gestão</label>
+        <input type="text" data-role="nome" value="${usuario.nome || ''}" placeholder="Nome do usuário">
+        <input type="password" data-role="senha" value="" placeholder="Nova senha (opcional)">
+        <div class="row-checkboxes">
+          <label class="checkbox-inline">
+            <input type="checkbox" data-role="ativo" ${usuario.ativo ? 'checked' : ''}>
+            <span>Usuário ativo no portal</span>
+          </label>
+          <label class="checkbox-inline">
+            <input type="checkbox" data-role="gestao" ${usuario.acesso_gestao ? 'checked' : ''}>
+            <span>Acesso à gestão</span>
+          </label>
         </div>
         <button type="button" class="btn-row-save">Salvar</button>
       </div>
@@ -107,8 +176,8 @@ function criarLinhaUsuario(usuario) {
 
   const inputNome = tr.querySelector('[data-role="nome"]');
   const inputSenha = tr.querySelector('[data-role="senha"]');
-  const checkAtivo = tr.querySelector('[data-role="ativo"]');
-  const checkGestao = tr.querySelector('[data-role="gestao"]');
+  const checkboxAtivo = tr.querySelector('[data-role="ativo"]');
+  const checkboxGestao = tr.querySelector('[data-role="gestao"]');
   const btnSalvar = tr.querySelector('.btn-row-save');
 
   btnSalvar.addEventListener('click', async () => {
@@ -122,22 +191,28 @@ function criarLinhaUsuario(usuario) {
     btnSalvar.textContent = 'Salvando...';
 
     try {
+      const payload = {
+        id: usuario.id,
+        nome: inputNome.value.trim(),
+        email: usuario.email, // <- correção crítica
+        senha: inputSenha.value.trim(),
+        ativo: checkboxAtivo.checked,
+        acesso_gestao: checkboxGestao.checked
+      };
+
       const resposta = await fetch('/api/gestao-usuarios', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`
         },
-        body: JSON.stringify({
-          id: usuario.id,
-          nome: inputNome.value.trim(),
-          senha: inputSenha.value.trim(),
-          ativo: checkAtivo.checked,
-          acesso_gestao: checkGestao.checked
-        })
+        body: JSON.stringify(payload)
       });
 
-      const resultado = await resposta.json().catch(() => ({ ok: false, message: 'Resposta inválida do servidor.' }));
+      const resultado = await resposta.json().catch(() => ({
+        ok: false,
+        message: 'Resposta inválida do servidor.'
+      }));
 
       if (!resposta.ok || !resultado.ok) {
         throw new Error(resultado.message || 'Erro ao atualizar usuário.');
@@ -156,111 +231,73 @@ function criarLinhaUsuario(usuario) {
   return tr;
 }
 
-async function carregarUsuarios() {
-  const accessToken = await getAccessToken();
-  if (!accessToken) {
-    window.location.href = `/formularios/informatica/login/index.html?redirect=${encodeURIComponent(window.location.pathname)}`;
-    return;
-  }
+if (formNovoUsuario) {
+  formNovoUsuario.addEventListener('submit', async (event) => {
+    event.preventDefault();
 
-  mostrarMensagem('', '');
-  resumoUsuarios.textContent = 'Carregando usuários...';
-  tbodyUsuarios.innerHTML = '';
-
-  try {
-    const resposta = await fetch(`/api/gestao-usuarios?${getQueryString()}`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
-    });
-
-    const resultado = await resposta.json().catch(() => ({ ok: false, message: 'Resposta inválida do servidor.' }));
-
-    if (resposta.status === 403) {
-      throw new Error(resultado.message || 'Acesso não autorizado a esta tela.');
-    }
-
-    if (!resposta.ok || !resultado.ok) {
-      throw new Error(resultado.message || 'Erro ao carregar usuários.');
-    }
-
-    const usuarios = Array.isArray(resultado.usuarios) ? resultado.usuarios : [];
-    resumoUsuarios.textContent = `${usuarios.length} usuário(s) localizado(s).`;
-
-    if (!usuarios.length) {
-      tbodyUsuarios.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum usuário encontrado para os filtros informados.</td></tr>';
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      window.location.href = `/formularios/informatica/login/index.html?redirect=${encodeURIComponent(window.location.pathname)}`;
       return;
     }
 
-    const fragment = document.createDocumentFragment();
-    usuarios.forEach((usuario) => fragment.appendChild(criarLinhaUsuario(usuario)));
-    tbodyUsuarios.appendChild(fragment);
-  } catch (error) {
-    resumoUsuarios.textContent = 'Não foi possível carregar os usuários.';
-    tbodyUsuarios.innerHTML = '<tr><td colspan="6" class="empty-state">Falha ao carregar os usuários.</td></tr>';
-    mostrarMensagem(error.message || 'Erro ao consultar usuários.', 'error');
-  }
-}
+    limparMensagem();
 
-formCriarUsuario.addEventListener('submit', async (event) => {
-  event.preventDefault();
+    const formData = new FormData(formNovoUsuario);
+    const payload = {
+      nome: String(formData.get('nome') || '').trim(),
+      email: String(formData.get('email') || '').trim(),
+      senha: String(formData.get('senha') || '').trim(),
+      ativo: formData.get('ativo') === 'on',
+      acesso_gestao: formData.get('acesso_gestao') === 'on'
+    };
 
-  if (!formCriarUsuario.reportValidity()) return;
-
-  const accessToken = await getAccessToken();
-  if (!accessToken) {
-    window.location.href = `/formularios/informatica/login/index.html?redirect=${encodeURIComponent(window.location.pathname)}`;
-    return;
-  }
-
-  btnCriarUsuario.disabled = true;
-  btnCriarUsuario.textContent = 'Criando...';
-  mostrarMensagem('', '');
-
-  try {
-    const formData = new FormData(formCriarUsuario);
-
-    const resposta = await fetch('/api/gestao-usuarios', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({
-        nome: String(formData.get('nome') || '').trim(),
-        email: String(formData.get('email') || '').trim(),
-        senha: String(formData.get('senha') || '').trim(),
-        ativo: document.getElementById('novo_ativo').checked,
-        acesso_gestao: document.getElementById('novo_acesso_gestao').checked
-      })
-    });
-
-    const resultado = await resposta.json().catch(() => ({ ok: false, message: 'Resposta inválida do servidor.' }));
-
-    if (!resposta.ok || !resultado.ok) {
-      throw new Error(resultado.message || 'Erro ao criar usuário.');
+    const btnSubmit = formNovoUsuario.querySelector('button[type="submit"]');
+    if (btnSubmit) {
+      btnSubmit.disabled = true;
+      btnSubmit.textContent = 'Criando...';
     }
 
-    formCriarUsuario.reset();
-    document.getElementById('novo_ativo').checked = true;
-    document.getElementById('novo_acesso_gestao').checked = false;
-    mostrarMensagem('Usuário criado com sucesso.', 'success');
-    await carregarUsuarios();
-  } catch (error) {
-    mostrarMensagem(error.message || 'Erro ao criar usuário.', 'error');
-  } finally {
-    btnCriarUsuario.disabled = false;
-    btnCriarUsuario.textContent = 'Criar usuário';
-  }
-});
+    try {
+      const resposta = await fetch('/api/gestao-usuarios', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        },
+        body: JSON.stringify(payload)
+      });
 
-formFiltrosUsuarios.addEventListener('submit', async (event) => {
+      const resultado = await resposta.json().catch(() => ({
+        ok: false,
+        message: 'Resposta inválida do servidor.'
+      }));
+
+      if (!resposta.ok || !resultado.ok) {
+        throw new Error(resultado.message || 'Erro ao criar usuário.');
+      }
+
+      mostrarMensagem('Usuário criado com sucesso.', 'success');
+      formNovoUsuario.reset();
+      await carregarUsuarios();
+    } catch (error) {
+      mostrarMensagem(error.message || 'Erro ao criar usuário.', 'error');
+    } finally {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = 'Criar usuário';
+      }
+    }
+  });
+}
+
+formFiltros.addEventListener('submit', async (event) => {
   event.preventDefault();
   await carregarUsuarios();
 });
 
-btnLimparUsuarios.addEventListener('click', async () => {
-  formFiltrosUsuarios.reset();
+btnLimparFiltros.addEventListener('click', async () => {
+  formFiltros.reset();
   await carregarUsuarios();
 });
 
