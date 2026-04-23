@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canal de Denúncias</title>
+  <meta
+    name="description"
+    content="Canal de denúncias para assuntos relacionados a assédio moral e assédio sexual."
+  >
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero__banner">
+        <img src="./capa.jpg" alt="Canal de denúncias" class="hero__banner-image">
+      </div>
+
+      <div class="hero__content">
+        <span class="hero__eyebrow">Grupo Examina e Radiológica</span>
+        <h1>Canal de Denúncias</h1>
+        <p>
+          Canal destinado exclusivamente ao recebimento de relatos relacionados a
+          assédio moral e assédio sexual.
+        </p>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="card card--info">
+        <h2>Orientações</h2>
+
+        <p>
+          Condutas praticadas contra a vontade de alguém — sejam de natureza sexual ou não —
+          manifestadas de forma verbal, não verbal, física ou por qualquer outro meio, e que
+          resultem em perturbação, constrangimento, discriminação, ofensa à dignidade ou que
+          criem um ambiente intimidativo, hostil, degradante, humilhante ou desestabilizador —
+          são consideradas formas de assédio ou práticas discriminatórias.
+        </p>
+
+        <p>
+          Como forma de aproximar e dar voz aos colaboradores, disponibilizamos este canal
+          <strong>exclusivamente para tratar de assuntos relacionados a Assédio Moral e Assédio Sexual</strong>.
+        </p>
+
+        <p class="highlight">
+          Este canal é confidencial. Caso deseje preservar sua identidade, evite informar
+          dados pessoais no relato, nos links enviados ou nos arquivos anexados.
+        </p>
+      </section>
+
+      <form id="formDenuncia" class="card card--form" novalidate>
+        <h2>Relato da Situação</h2>
+
+        <div class="form-group">
+          <label for="descricao">
+            Descreva abaixo a situação que deseja relatar
+            <span class="required">*</span>
+          </label>
+
+          <textarea
+            id="descricao"
+            name="descricao"
+            required
+            rows="10"
+            placeholder="Relate o que aconteceu, quando ocorreu, onde, quem estava envolvido, se há testemunhas, etc."
+          ></textarea>
+
+          <small class="help">
+            Caso queira preservar sua identidade, evite informar nome, CPF, matrícula,
+            telefone, e-mail ou outros dados pessoais.
+          </small>
+
+          <small class="error" id="erro-descricao"></small>
+        </div>
+
+        <div class="form-group">
+          <label for="links_provas">Links de provas</label>
+          <input
+            type="text"
+            id="links_provas"
+            name="links_provas"
+            placeholder="Cole aqui links de prints, fotos, vídeos ou documentos (opcional)"
+          >
+          <small class="help">
+            Campo opcional para links de evidências hospedadas em outro local.
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label for="provas">Anexar arquivos</label>
+          <input
+            type="file"
+            id="provas"
+            name="provas"
+            multiple
+            accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.mp3,.mp4,.wav"
+          >
+          <small class="help">
+            Você pode anexar imagens, documentos, áudios ou vídeos relacionados ao relato.
+            Evite anexar arquivos que contenham dados pessoais caso deseje manter sigilo adicional.
+          </small>
+          <div id="listaArquivos" class="file-list"></div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn btn--primary">Enviar denúncia</button>
+          <button type="reset" class="btn btn--secondary">Limpar formulário</button>
+        </div>
+
+        <p class="notice">
+          Ao clicar em “Enviar denúncia”, as informações serão encaminhadas à equipe
+          responsável pela apuração.
+        </p>
+
+        <p id="msg" class="msg"></p>
+      </form>
+
+      <a href="/" class="back-link">← Voltar para a central</a>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

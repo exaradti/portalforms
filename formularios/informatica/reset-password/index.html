@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Redefinir senha | Formulários Informática</title>
+  <meta name="description" content="Definição de nova senha para a área de Informática.">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero__logo-wrap">
+        <img src="/assets/logo-grupo.png" alt="Logos Radiológica e Examina" class="hero__logo">
+      </div>
+      <div class="hero__content">
+        <span class="hero__eyebrow">Formulários Informática</span>
+        <h1>Definir nova senha</h1>
+        <p>Informe a nova senha para concluir a recuperação de acesso.</p>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="login-shell" aria-labelledby="titulo-reset-senha">
+        <div class="login-card">
+          <div class="login-card__header">
+            <h2 id="titulo-reset-senha">Nova senha</h2>
+            <p class="helper-text">Abra esta página a partir do link enviado por e-mail.</p>
+          </div>
+
+          <form id="resetPasswordForm" class="login-form" novalidate>
+            <div class="field">
+              <label for="newPassword">Nova senha</label>
+              <input type="password" id="newPassword" name="newPassword" placeholder="Digite a nova senha" required minlength="6">
+            </div>
+
+            <div class="field">
+              <label for="confirmPassword">Confirmar nova senha</label>
+              <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Repita a nova senha" required minlength="6">
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn-submit">Atualizar senha</button>
+              <a href="/formularios/informatica/forgot-password/index.html" class="btn-secondary" id="btnVoltarForgot">Solicitar novo link</a>
+            </div>
+
+            <div id="mensagemReset" class="form-message" aria-live="polite"></div>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>© 2026 Grupo Examina e Radiológica</p>
+    </footer>
+  </div>
+
+  <script src="/assets/supabase-config.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
