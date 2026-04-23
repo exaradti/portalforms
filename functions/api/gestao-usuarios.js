@@ -182,14 +182,17 @@ async function upsertProfile(context, payload) {
 }
 
 async function upsertPermissaoGestao(context, profileId, ativo) {
-  const resposta = await fetch(`${context.env.SUPABASE_URL}/rest/v1/informatica_gestao_permissoes`, {
-    method: 'POST',
-    headers: adminHeaders(context, {
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates,return=representation'
-    }),
-    body: JSON.stringify([{ profile_id: profileId, ativo }])
-  });
+  const resposta = await fetch(
+    `${context.env.SUPABASE_URL}/rest/v1/informatica_gestao_permissoes?on_conflict=profile_id`,
+    {
+      method: 'POST',
+      headers: adminHeaders(context, {
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=representation'
+      }),
+      body: JSON.stringify([{ profile_id: profileId, ativo }])
+    }
+  );
 
   if (!resposta.ok) {
     const erro = await resposta.text();
