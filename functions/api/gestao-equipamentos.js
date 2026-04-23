@@ -2,10 +2,6 @@ function limparTexto(valor) {
   return (valor || '').toString().trim();
 }
 
-function escapeFiltro(valor) {
-  return encodeURIComponent(valor);
-}
-
 async function validarUsuario(context) {
   const authorization = context.request.headers.get('Authorization') || '';
 
@@ -164,10 +160,24 @@ async function listarRegistros(context, searchParams) {
   return resposta.json();
 }
 
+function normalizarStatusGlpi(valor) {
+  const status = limparTexto(valor).toLowerCase();
+
+  if (!status) return 'pendente';
+  if (status === 'pendente') return 'pendente';
+
+  // compatibilidade com o front antigo
+  if (status === 'replicado' || status === 'registrado') {
+    return 'registrado';
+  }
+
+  throw new Error('Status GLPI inválido.');
+}
+
 async function atualizarRegistro(context, body, usuario, perfil) {
   const origem = limparTexto(body.origem).toLowerCase();
   const registroId = Number(body.registro_id);
-  const statusGlpi = limparTexto(body.status_glpi).toLowerCase() || 'pendente';
+  const statusGlpi = normalizarStatusGlpi(body.status_glpi);
   const glpiTag = limparTexto(body.glpi_tag) || null;
 
   if (!['troca', 'instalacao'].includes(origem)) {
@@ -176,10 +186,6 @@ async function atualizarRegistro(context, body, usuario, perfil) {
 
   if (!Number.isFinite(registroId) || registroId <= 0) {
     throw new Error('Registro inválido para atualização.');
-  }
-
-  if (!['pendente', 'replicado'].includes(statusGlpi)) {
-    throw new Error('Status GLPI inválido.');
   }
 
   const tabela = origem === 'troca' ? 'trocas_ativos' : 'instalacoes_ativos';
