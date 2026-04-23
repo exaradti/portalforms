@@ -47,10 +47,18 @@ async function validarUsuario(context) {
   const authorization = context.request.headers.get("Authorization") || "";
 
   if (!authorization.startsWith("Bearer ")) {
-    return null;
+    throw new Error("Token Bearer não enviado.");
   }
 
   const token = authorization.slice(7);
+
+  if (!context.env.SUPABASE_URL) {
+    throw new Error("SUPABASE_URL não configurada no Pages.");
+  }
+
+  if (!context.env.SUPABASE_ANON_KEY) {
+    throw new Error("SUPABASE_ANON_KEY não configurada no Pages.");
+  }
 
   const resposta = await fetch(`${context.env.SUPABASE_URL}/auth/v1/user`, {
     method: "GET",
@@ -61,7 +69,8 @@ async function validarUsuario(context) {
   });
 
   if (!resposta.ok) {
-    return null;
+    const texto = await resposta.text();
+    throw new Error(`Erro ao validar usuário: ${resposta.status} - ${texto}`);
   }
 
   return resposta.json();
@@ -136,13 +145,6 @@ export async function onRequestPost(context) {
   try {
     const usuario = await validarUsuario(context);
 
-    if (!usuario) {
-      return Response.json(
-        { ok: false, message: "Sessão inválida ou expirada. Faça login novamente." },
-        { status: 401 }
-      );
-    }
-
     const perfil = await buscarPerfil(context, usuario.id);
 
     if (perfil && perfil.ativo === false) {
@@ -170,53 +172,6 @@ export async function onRequestPost(context) {
       motivo_troca: limparTexto(data.motivo_troca),
       status_glpi: "pendente"
     };
-
-    if (
-      !dados.tipo_ativo ||
-      !dados.nome_ativo_antigo ||
-      !dados.nome_ativo_novo ||
-      !dados.setor ||
-      !dados.unidade ||
-      !dados.motivo_troca
-    ) {
-      return Response.json(
-        { ok: false, message: "Preencha todos os campos obrigatórios." },
-        { status: 400 }
-      );
-    }
-
-    const tiposValidos = ["Computador", "Monitor", "Impressora", "Tablet"];
-
-    if (!tiposValidos.includes(dados.tipo_ativo)) {
-      return Response.json(
-        { ok: false, message: "Tipo de ativo inválido." },
-        { status: 400 }
-      );
-    }
-
-    if (["Computador", "Impressora"].includes(dados.tipo_ativo)) {
-      if (!dados.ip_ativo_antigo || !dados.ip_ativo_novo) {
-        return Response.json(
-          { ok: false, message: "Informe o IP antigo e o novo para este tipo de ativo." },
-          { status: 400 }
-        );
-      }
-    } else {
-      dados.ip_ativo_antigo = "";
-      dados.ip_ativo_novo = "";
-    }
-
-    if (dados.tipo_ativo === "Tablet") {
-      if (!dados.modelo_ativo_antigo || !dados.modelo_ativo_novo) {
-        return Response.json(
-          { ok: false, message: "Informe o modelo antigo e o novo do tablet." },
-          { status: 400 }
-        );
-      }
-    } else {
-      dados.modelo_ativo_antigo = "";
-      dados.modelo_ativo_novo = "";
-    }
 
     await salvarNoSupabase(context, dados);
     await enviarEmail(context, dados, usuario, perfil);
