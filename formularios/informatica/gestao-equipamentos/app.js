@@ -85,7 +85,7 @@ function criarLinha(registro) {
       <div class="row-edit">
         <select data-role="status">
           <option value="pendente" ${statusAtual === 'pendente' ? 'selected' : ''}>Pendente</option>
-          <option value="replicado" ${statusAtual === 'replicado' ? 'selected' : ''}>Replicado</option>
+          <option value="replicado" ${statusAtual === 'registrado' ? 'selected' : ''}>Registrado</option>
         </select>
         <input type="text" data-role="tag" placeholder="Tag GLPI" value="${registro.glpi_tag || ''}">
         <button type="button" class="btn-row-save">Salvar</button>
