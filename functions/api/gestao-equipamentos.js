@@ -2,8 +2,13 @@ function limparTexto(valor) {
   return (valor || '').toString().trim();
 }
 
-function escapeFiltro(valor) {
-  return encodeURIComponent(valor);
+function adminHeaders(context, extras = {}) {
+  return {
+    apikey: context.env.SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${context.env.SUPABASE_SERVICE_ROLE_KEY}`,
+    Accept: 'application/json',
+    ...extras
+  };
 }
 
 async function validarUsuario(context) {
@@ -38,42 +43,34 @@ async function buscarPerfil(context, userId) {
     `${context.env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,nome,email,ativo`,
     {
       method: 'GET',
-      headers: {
-        apikey: context.env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${context.env.SUPABASE_SERVICE_ROLE_KEY}`,
-        Accept: 'application/json'
-      }
+      headers: adminHeaders(context)
     }
   );
 
-  if (!resposta.ok) return null;
+  if (!resposta.ok) {
+    const erro = await resposta.text();
+    throw new Error(`Erro ao consultar perfil: ${erro}`);
+  }
 
   const retorno = await resposta.json();
   return Array.isArray(retorno) ? (retorno[0] || null) : null;
 }
 
 async function validarAcessoGestao(context, usuario, perfil) {
-  const email = (perfil?.email || usuario?.email || '').toLowerCase().trim();
-  if (!email) return false;
-
-  if (email === 'informatica@radiologica.com.br') {
-    return true;
-  }
+  const profileId = (perfil?.id || usuario?.id || '').toString().trim();
+  if (!profileId) return false;
 
   const resposta = await fetch(
-    `${context.env.SUPABASE_URL}/rest/v1/informatica_gestao_permissoes?select=id,email,ativo&email=eq.${encodeURIComponent(email)}&ativo=eq.true`,
+    `${context.env.SUPABASE_URL}/rest/v1/informatica_gestao_permissoes?select=id,profile_id,ativo&profile_id=eq.${encodeURIComponent(profileId)}&ativo=eq.true`,
     {
       method: 'GET',
-      headers: {
-        apikey: context.env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${context.env.SUPABASE_SERVICE_ROLE_KEY}`,
-        Accept: 'application/json'
-      }
+      headers: adminHeaders(context)
     }
   );
 
   if (!resposta.ok) {
-    return false;
+    const erro = await resposta.text();
+    throw new Error(`Erro ao validar permissão de gestão: ${erro}`);
   }
 
   const retorno = await resposta.json();
@@ -88,7 +85,7 @@ function buildListUrl(baseUrl, params) {
 
   const dataInicio = limparTexto(params.get('data_inicio'));
   if (dataInicio) {
-    url.searchParams.set('created_at', `gte.${dataInicio}T00:00:00`);
+    url.searchParams.append('created_at', `gte.${dataInicio}T00:00:00`);
   }
 
   const dataFim = limparTexto(params.get('data_fim'));
@@ -125,26 +122,15 @@ function buildListUrl(baseUrl, params) {
     }
   });
 
-  const filtroTag = limparTexto(params.get('filtro_tag'));
-  if (filtroTag === 'com_tag') {
-    url.searchParams.set('glpi_tag', 'not.is.null');
-  }
-  if (filtroTag === 'sem_tag') {
-    url.searchParams.set('glpi_tag', 'is.null');
-  }
-
   return url.toString();
 }
 
 async function listarRegistros(context, searchParams) {
   const url = buildListUrl(context.env.SUPABASE_URL, searchParams);
+
   const resposta = await fetch(url, {
     method: 'GET',
-    headers: {
-      apikey: context.env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${context.env.SUPABASE_SERVICE_ROLE_KEY}`,
-      Accept: 'application/json'
-    }
+    headers: adminHeaders(context)
   });
 
   if (!resposta.ok) {
@@ -155,10 +141,19 @@ async function listarRegistros(context, searchParams) {
   return resposta.json();
 }
 
+function normalizarStatusGlpi(valor) {
+  const status = limparTexto(valor).toLowerCase();
+
+  if (!status || status === 'pendente') return 'pendente';
+  if (status === 'registrado' || status === 'replicado') return 'registrado';
+
+  throw new Error('Status GLPI inválido.');
+}
+
 async function atualizarRegistro(context, body, usuario, perfil) {
   const origem = limparTexto(body.origem).toLowerCase();
   const registroId = Number(body.registro_id);
-  const statusGlpi = limparTexto(body.status_glpi).toLowerCase() || 'pendente';
+  const statusGlpi = normalizarStatusGlpi(body.status_glpi);
   const glpiTag = limparTexto(body.glpi_tag) || null;
 
   if (!['troca', 'instalacao'].includes(origem)) {
@@ -167,10 +162,6 @@ async function atualizarRegistro(context, body, usuario, perfil) {
 
   if (!Number.isFinite(registroId) || registroId <= 0) {
     throw new Error('Registro inválido para atualização.');
-  }
-
-  if (!['pendente', 'replicado'].includes(statusGlpi)) {
-    throw new Error('Status GLPI inválido.');
   }
 
   const tabela = origem === 'troca' ? 'trocas_ativos' : 'instalacoes_ativos';
@@ -187,12 +178,10 @@ async function atualizarRegistro(context, body, usuario, perfil) {
     `${context.env.SUPABASE_URL}/rest/v1/${tabela}?id=eq.${registroId}`,
     {
       method: 'PATCH',
-      headers: {
+      headers: adminHeaders(context, {
         'Content-Type': 'application/json',
-        apikey: context.env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${context.env.SUPABASE_SERVICE_ROLE_KEY}`,
         Prefer: 'return=representation'
-      },
+      }),
       body: JSON.stringify(payload)
     }
   );
@@ -211,7 +200,11 @@ export async function onRequestGet(context) {
     const usuario = await validarUsuario(context);
     const perfil = await buscarPerfil(context, usuario.id);
 
-    if (perfil && perfil.ativo === false) {
+    if (!perfil) {
+      return Response.json({ ok: false, message: 'Perfil do usuário não encontrado.' }, { status: 403 });
+    }
+
+    if (perfil.ativo === false) {
       return Response.json({ ok: false, message: 'Usuário inativo.' }, { status: 403 });
     }
 
@@ -221,15 +214,28 @@ export async function onRequestGet(context) {
     }
 
     const url = new URL(context.request.url);
+
+    if (url.searchParams.get('check_access') === '1') {
+      return Response.json({
+        ok: true,
+        permitido: true,
+        profile_id: perfil.id
+      });
+    }
+
     const registros = await listarRegistros(context, url.searchParams);
 
     return Response.json({
       ok: true,
+      permitido: true,
       registros,
       total: Array.isArray(registros) ? registros.length : 0
     });
   } catch (error) {
-    return Response.json({ ok: false, message: error.message || 'Erro ao consultar gestão de equipamentos.' }, { status: 500 });
+    return Response.json(
+      { ok: false, message: error.message || 'Erro ao consultar gestão de equipamentos.' },
+      { status: 500 }
+    );
   }
 }
 
@@ -238,7 +244,11 @@ export async function onRequestPatch(context) {
     const usuario = await validarUsuario(context);
     const perfil = await buscarPerfil(context, usuario.id);
 
-    if (perfil && perfil.ativo === false) {
+    if (!perfil) {
+      return Response.json({ ok: false, message: 'Perfil do usuário não encontrado.' }, { status: 403 });
+    }
+
+    if (perfil.ativo === false) {
       return Response.json({ ok: false, message: 'Usuário inativo.' }, { status: 403 });
     }
 
@@ -250,8 +260,15 @@ export async function onRequestPatch(context) {
     const body = await context.request.json();
     const atualizado = await atualizarRegistro(context, body, usuario, perfil);
 
-    return Response.json({ ok: true, registro: atualizado, message: 'Registro atualizado com sucesso.' });
+    return Response.json({
+      ok: true,
+      registro: atualizado,
+      message: 'Registro atualizado com sucesso.'
+    });
   } catch (error) {
-    return Response.json({ ok: false, message: error.message || 'Erro ao atualizar gestão de equipamentos.' }, { status: 500 });
+    return Response.json(
+      { ok: false, message: error.message || 'Erro ao atualizar gestão de equipamentos.' },
+      { status: 500 }
+    );
   }
 }
