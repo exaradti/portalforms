@@ -23,7 +23,18 @@ function mostrarMensagem(texto, tipo) {
 function formataData(valor) {
   if (!valor) return '-';
   const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return '-';
   return `${data.toLocaleDateString('pt-BR')} ${data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function normalizarStatus(status) {
+  const valor = (status || '').toString().trim().toLowerCase();
+  if (valor === 'registrado') return 'registrado';
+  return 'pendente';
+}
+
+function getStatusLabel(status) {
+  return normalizarStatus(status) === 'registrado' ? 'Registrado' : 'Pendente';
 }
 
 function montarDetalhesEquipamento(registro) {
@@ -56,7 +67,7 @@ function montarDetalhesEquipamento(registro) {
 
 function criarLinha(registro) {
   const tr = document.createElement('tr');
-  const statusAtual = registro.status_glpi || 'pendente';
+  const statusAtual = normalizarStatus(registro.status_glpi);
 
   tr.innerHTML = `
     <td>${formataData(registro.created_at)}</td>
@@ -75,7 +86,7 @@ function criarLinha(registro) {
       ${registro.glpi_atualizado_por ? `<div class="row-meta">Últ. atualização: ${registro.glpi_atualizado_por}</div>` : ''}
     </td>
     <td>
-      <span class="row-badge row-badge--${statusAtual}">${statusAtual}</span>
+      <span class="row-badge row-badge--${statusAtual}">${getStatusLabel(statusAtual)}</span>
       ${registro.glpi_atualizado_em ? `<div class="row-meta">${formataData(registro.glpi_atualizado_em)}</div>` : ''}
     </td>
     <td>
@@ -85,7 +96,7 @@ function criarLinha(registro) {
       <div class="row-edit">
         <select data-role="status">
           <option value="pendente" ${statusAtual === 'pendente' ? 'selected' : ''}>Pendente</option>
-          <option value="replicado" ${statusAtual === 'replicado' ? 'selected' : ''}>Replicado</option>
+          <option value="registrado" ${statusAtual === 'registrado' ? 'selected' : ''}>Registrado</option>
         </select>
         <input type="text" data-role="tag" placeholder="Tag GLPI" value="${registro.glpi_tag || ''}">
         <button type="button" class="btn-row-save">Salvar</button>
@@ -146,8 +157,9 @@ function getQueryString() {
   const params = new URLSearchParams();
 
   for (const [chave, valor] of formData.entries()) {
-    if (String(valor).trim()) {
-      params.set(chave, String(valor).trim());
+    const texto = String(valor).trim();
+    if (texto) {
+      params.set(chave, texto);
     }
   }
 
@@ -211,6 +223,33 @@ btnLimparFiltros.addEventListener('click', async () => {
   await carregarRegistros();
 });
 
+async function validarPermissaoTela() {
+  const accessToken = await getAccessToken();
+  if (!accessToken) {
+    window.location.href = `/formularios/informatica/login/index.html?redirect=${encodeURIComponent(window.location.pathname)}`;
+    return false;
+  }
+
+  const resposta = await fetch('/api/gestao-equipamentos?check_access=1', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  const resultado = await resposta.json().catch(() => ({ ok: false, message: 'Resposta inválida do servidor.' }));
+
+  if (resposta.status === 403) {
+    window.location.href = '/formularios/informatica/index.html';
+    return false;
+  }
+
+  if (!resposta.ok || !resultado.ok || resultado.permitido !== true) {
+    throw new Error(resultado.message || 'Acesso não autorizado a esta tela.');
+  }
+
+  return true;
+}
+
 (async () => {
   const session = await requireAuth(window.location.pathname);
   if (!session) return;
@@ -218,6 +257,9 @@ btnLimparFiltros.addEventListener('click', async () => {
   renderUserDisplayName('#authUserName', session);
   setupUserMenu();
   bindLogoutButtons();
+
+  const permitido = await validarPermissaoTela();
+  if (!permitido) return;
 
   loading.hidden = true;
   content.hidden = false;
