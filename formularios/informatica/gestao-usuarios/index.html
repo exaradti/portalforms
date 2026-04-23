@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestão de Usuários | Grupo Examina e Radiológica</title>
+  <meta name="description" content="Tela para criação e gerenciamento de usuários do portal.">
+  <link rel="stylesheet" href="/assets/style.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero__logo-wrap">
+        <img src="/assets/logo-grupo.png" alt="Logos Radiológica e Examina" class="hero__logo">
+      </div>
+
+      <div class="hero__content">
+        <span class="hero__eyebrow">Gestão de Usuários</span>
+        <h1>Gestão de Usuários do Portal</h1>
+        <p>Crie usuários, mantenha nome e status atualizados no sistema e conceda ou remova acesso às áreas de gestão.</p>
+
+        <div class="page-actions">
+          <a href="/formularios/informatica/index.html" class="btn-link">← Voltar para formulários de informática</a>
+
+          <div class="user-menu" id="userMenu" hidden>
+            <button type="button" class="btn-link user-menu__trigger" id="userMenuBtn" aria-haspopup="true" aria-expanded="false">
+              <span id="authUserName">Usuário</span> ▾
+            </button>
+            <div class="user-menu__dropdown" id="userMenuDropdown" hidden>
+              <button type="button" class="user-menu__logout" data-auth-logout>Sair</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section id="loadingAuth" class="loading-box" aria-live="polite">Validando acesso...</section>
+
+      <div id="conteudoProtegido" class="protected-content" hidden>
+        <section class="form-shell">
+          <div class="form-card create-card">
+            <div class="form-card__header">
+              <h2>Criar novo usuário</h2>
+              <p>Preencha os dados abaixo para criar um novo usuário no portal, vincular no banco e decidir se ele terá ou não acesso à gestão.</p>
+            </div>
+
+            <form id="formCriarUsuario" class="form-grid" autocomplete="off">
+              <div class="field">
+                <label for="novo_nome">Nome completo</label>
+                <input type="text" id="novo_nome" name="nome" required>
+              </div>
+
+              <div class="field">
+                <label for="novo_email">E-mail</label>
+                <input type="email" id="novo_email" name="email" required>
+              </div>
+
+              <div class="field">
+                <label for="nova_senha">Senha inicial</label>
+                <input type="text" id="nova_senha" name="senha" required>
+              </div>
+
+              <div class="field checkbox-field">
+                <label class="checkbox-inline">
+                  <input type="checkbox" id="novo_ativo" name="ativo" checked>
+                  <span>Usuário ativo no portal</span>
+                </label>
+              </div>
+
+              <div class="field checkbox-field">
+                <label class="checkbox-inline">
+                  <input type="checkbox" id="novo_acesso_gestao" name="acesso_gestao">
+                  <span>Dar acesso à gestão</span>
+                </label>
+              </div>
+
+              <div class="field field--full form-actions-inline">
+                <button type="submit" class="btn-submit" id="btnCriarUsuario">Criar usuário</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="results-shell">
+          <div class="toolbar toolbar-users">
+            <div>
+              <h2>Usuários cadastrados</h2>
+              <p id="resumoUsuarios">Carregando usuários...</p>
+            </div>
+          </div>
+
+          <p id="mensagemTela" class="form-message"></p>
+
+          <form id="formFiltrosUsuarios" class="filter-bar" autocomplete="off">
+            <div class="field field--grow">
+              <label for="buscaUsuarios">Buscar por nome ou e-mail</label>
+              <input type="text" id="buscaUsuarios" name="q" placeholder="Ex.: Germano, jose@...">
+            </div>
+
+            <div class="field field--compact">
+              <label for="filtroAtivo">Status do usuário</label>
+              <select id="filtroAtivo" name="ativo">
+                <option value="">Todos</option>
+                <option value="true">Ativos</option>
+                <option value="false">Inativos</option>
+              </select>
+            </div>
+
+            <div class="field field--compact">
+              <label for="filtroGestao">Acesso à gestão</label>
+              <select id="filtroGestao" name="acesso_gestao">
+                <option value="">Todos</option>
+                <option value="true">Com acesso</option>
+                <option value="false">Sem acesso</option>
+              </select>
+            </div>
+
+            <div class="field field--actions">
+              <button type="submit" class="btn-submit" id="btnFiltrarUsuarios">Filtrar</button>
+              <button type="button" class="btn-secondary" id="btnLimparUsuarios">Limpar</button>
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <table class="management-table users-table">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>E-mail</th>
+                  <th>Status</th>
+                  <th>Gestão</th>
+                  <th>Último login</th>
+                  <th>Alterações</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyUsuarios"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <p>© 2026 Grupo Examina e Radiológica</p>
+    </footer>
+  </div>
+
+  <script src="/assets/supabase-config.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
