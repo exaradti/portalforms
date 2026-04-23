@@ -214,7 +214,6 @@ export async function onRequestGet(context) {
     }
 
     const url = new URL(context.request.url);
-
     if (url.searchParams.get('check_access') === '1') {
       return Response.json({
         ok: true,
@@ -224,13 +223,7 @@ export async function onRequestGet(context) {
     }
 
     const registros = await listarRegistros(context, url.searchParams);
-
-    return Response.json({
-      ok: true,
-      permitido: true,
-      registros,
-      total: Array.isArray(registros) ? registros.length : 0
-    });
+    return Response.json({ ok: true, permitido: true, registros, total: Array.isArray(registros) ? registros.length : 0 });
   } catch (error) {
     return Response.json(
       { ok: false, message: error.message || 'Erro ao consultar gestão de equipamentos.' },
@@ -260,11 +253,7 @@ export async function onRequestPatch(context) {
     const body = await context.request.json();
     const atualizado = await atualizarRegistro(context, body, usuario, perfil);
 
-    return Response.json({
-      ok: true,
-      registro: atualizado,
-      message: 'Registro atualizado com sucesso.'
-    });
+    return Response.json({ ok: true, registro: atualizado, message: 'Registro atualizado com sucesso.' });
   } catch (error) {
     return Response.json(
       { ok: false, message: error.message || 'Erro ao atualizar gestão de equipamentos.' },
