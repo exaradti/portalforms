@@ -13,6 +13,7 @@ function getUserDisplayName(usuario, perfil) {
 
 function montarCorpoEmail(dados, usuario, perfil) {
   const nomeTecnico = getUserDisplayName(usuario, perfil);
+
   const linhas = [
     "Nova troca de equipamento registrada",
     "",
@@ -39,17 +40,18 @@ function montarCorpoEmail(dados, usuario, perfil) {
   linhas.push("Motivo da troca:");
   linhas.push(dados.motivo_troca);
 
-  return linhas.join("
-");
+  return linhas.join("\n");
 }
 
 async function validarUsuario(context) {
   const authorization = context.request.headers.get("Authorization") || "";
+
   if (!authorization.startsWith("Bearer ")) {
     return null;
   }
 
   const token = authorization.slice(7);
+
   const resposta = await fetch(`${context.env.SUPABASE_URL}/auth/v1/user`, {
     method: "GET",
     headers: {
@@ -68,14 +70,17 @@ async function validarUsuario(context) {
 async function buscarPerfil(context, userId) {
   if (!userId) return null;
 
-  const resposta = await fetch(`${context.env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,nome,email,ativo`, {
-    method: "GET",
-    headers: {
-      apikey: context.env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${context.env.SUPABASE_SERVICE_ROLE_KEY}`,
-      Accept: "application/json"
+  const resposta = await fetch(
+    `${context.env.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,nome,email,ativo`,
+    {
+      method: "GET",
+      headers: {
+        apikey: context.env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${context.env.SUPABASE_SERVICE_ROLE_KEY}`,
+        Accept: "application/json"
+      }
     }
-  });
+  );
 
   if (!resposta.ok) {
     return null;
@@ -130,13 +135,21 @@ async function enviarEmail(context, dados, usuario, perfil) {
 export async function onRequestPost(context) {
   try {
     const usuario = await validarUsuario(context);
+
     if (!usuario) {
-      return Response.json({ ok: false, message: "Sessão inválida ou expirada. Faça login novamente." }, { status: 401 });
+      return Response.json(
+        { ok: false, message: "Sessão inválida ou expirada. Faça login novamente." },
+        { status: 401 }
+      );
     }
 
     const perfil = await buscarPerfil(context, usuario.id);
+
     if (perfil && perfil.ativo === false) {
-      return Response.json({ ok: false, message: "Usuário sem permissão para registrar trocas." }, { status: 403 });
+      return Response.json(
+        { ok: false, message: "Usuário sem permissão para registrar trocas." },
+        { status: 403 }
+      );
     }
 
     const data = await context.request.json();
@@ -158,18 +171,35 @@ export async function onRequestPost(context) {
       status_glpi: "pendente"
     };
 
-    if (!dados.tipo_ativo || !dados.nome_ativo_antigo || !dados.nome_ativo_novo || !dados.setor || !dados.unidade || !dados.motivo_troca) {
-      return Response.json({ ok: false, message: "Preencha todos os campos obrigatórios." }, { status: 400 });
+    if (
+      !dados.tipo_ativo ||
+      !dados.nome_ativo_antigo ||
+      !dados.nome_ativo_novo ||
+      !dados.setor ||
+      !dados.unidade ||
+      !dados.motivo_troca
+    ) {
+      return Response.json(
+        { ok: false, message: "Preencha todos os campos obrigatórios." },
+        { status: 400 }
+      );
     }
 
     const tiposValidos = ["Computador", "Monitor", "Impressora", "Tablet"];
+
     if (!tiposValidos.includes(dados.tipo_ativo)) {
-      return Response.json({ ok: false, message: "Tipo de ativo inválido." }, { status: 400 });
+      return Response.json(
+        { ok: false, message: "Tipo de ativo inválido." },
+        { status: 400 }
+      );
     }
 
     if (["Computador", "Impressora"].includes(dados.tipo_ativo)) {
       if (!dados.ip_ativo_antigo || !dados.ip_ativo_novo) {
-        return Response.json({ ok: false, message: "Informe o IP antigo e o novo para este tipo de ativo." }, { status: 400 });
+        return Response.json(
+          { ok: false, message: "Informe o IP antigo e o novo para este tipo de ativo." },
+          { status: 400 }
+        );
       }
     } else {
       dados.ip_ativo_antigo = "";
@@ -178,7 +208,10 @@ export async function onRequestPost(context) {
 
     if (dados.tipo_ativo === "Tablet") {
       if (!dados.modelo_ativo_antigo || !dados.modelo_ativo_novo) {
-        return Response.json({ ok: false, message: "Informe o modelo antigo e o novo do tablet." }, { status: 400 });
+        return Response.json(
+          { ok: false, message: "Informe o modelo antigo e o novo do tablet." },
+          { status: 400 }
+        );
       }
     } else {
       dados.modelo_ativo_antigo = "";
@@ -188,8 +221,15 @@ export async function onRequestPost(context) {
     await salvarNoSupabase(context, dados);
     await enviarEmail(context, dados, usuario, perfil);
 
-    return Response.json({ ok: true, message: `Registro salvo com sucesso para ${nomeTecnico}.` });
+    return Response.json({
+      ok: true,
+      message: `Registro salvo com sucesso para ${nomeTecnico}.`
+    });
+
   } catch (error) {
-    return Response.json({ ok: false, message: error.message || "Erro interno ao processar a troca." }, { status: 500 });
+    return Response.json(
+      { ok: false, message: error.message || "Erro interno ao processar a troca." },
+      { status: 500 }
+    );
   }
 }
