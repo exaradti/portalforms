@@ -7,10 +7,24 @@ const buscaEl = document.getElementById('busca');
 const ordenacaoEl = document.getElementById('ordenacao');
 const resumoEl = document.getElementById('resumoResultados');
 const paginacaoEl = document.getElementById('paginacao');
+const modalAtivo = document.getElementById('modalAtivo');
+const modalAtivoBody = document.getElementById('modalAtivoBody');
+const modalAtivoTitulo = document.getElementById('modalAtivoTitulo');
+const btnFecharModal = document.getElementById('btnFecharModal');
 
 let listaAtual = [];
 let paginaAtual = 1;
 const itensPorPagina = 50;
+
+function escaparHtml(valor) {
+  return (valor ?? '-')
+    .toString()
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
 
 function ordenarLista(lista) {
   const tipo = ordenacaoEl?.value || 'asc';
@@ -58,7 +72,7 @@ function renderEmpty() {
 }
 
 function renderErro(msg) {
-  tabela.innerHTML = `<tr><td colspan="6" class="glpi-empty">${msg}</td></tr>`;
+  tabela.innerHTML = `<tr><td colspan="6" class="glpi-empty">${escaparHtml(msg)}</td></tr>`;
   if (resumoEl) resumoEl.textContent = 'Erro ao carregar ativos';
   if (paginacaoEl) paginacaoEl.innerHTML = '';
 }
@@ -141,23 +155,144 @@ function renderAtivos(lista) {
     const statusTexto = item.status || '-';
 
     tr.innerHTML = `
-      <td>${item.tipo || '-'}</td>
-      <td><strong>${item.nome || '-'}</strong></td>
-      <td>${item.serial || '-'}</td>
+      <td>${escaparHtml(item.tipo || '-')}</td>
+      <td><strong>${escaparHtml(item.nome || '-')}</strong></td>
+      <td>${escaparHtml(item.serial || '-')}</td>
       <td>
         <span class="status-badge ${classeStatus(statusTexto)}">
-          ${statusTexto}
+          ${escaparHtml(statusTexto)}
         </span>
       </td>
-      <td>${item.localizacao || '-'}</td>
-      <td>${item.entidade || '-'}</td>
+      <td>${escaparHtml(item.localizacao || '-')}</td>
+      <td>${escaparHtml(item.entidade || '-')}</td>
     `;
 
+    tr.addEventListener('click', () => abrirModalAtivo(item));
     tabela.appendChild(tr);
   });
 
   renderResumo(total);
   renderPaginacao(total);
+}
+
+function detalheLinha(rotulo, valor) {
+  return `
+    <div class="detail-label">${escaparHtml(rotulo)}</div>
+    <div class="detail-value">${escaparHtml(valor || '-')}</div>
+  `;
+}
+
+function detalheStatus(rotulo, valor) {
+  const status = valor || '-';
+  return `
+    <div class="detail-label">${escaparHtml(rotulo)}</div>
+    <div class="detail-value">
+      <span class="status-badge ${classeStatus(status)}">${escaparHtml(status)}</span>
+    </div>
+  `;
+}
+
+function montarDetalhesExtras(item) {
+  if (item.tipo === 'Computador') {
+    return `
+      ${detalheLinha('IP', item.ip)}
+      ${detalheLinha('Sistema operacional', item.sistema)}
+      ${detalheLinha('Processador', item.processador)}
+      ${detalheLinha('Memória RAM', item.memoria)}
+      ${detalheLinha('Armazenamento', item.armazenamento)}
+      ${detalheLinha('Fabricante', item.fabricante)}
+      ${detalheLinha('Modelo', item.modelo)}
+    `;
+  }
+
+  if (item.tipo === 'Telefone') {
+    return `
+      ${detalheLinha('IP', item.ip)}
+      ${detalheLinha('Sistema operacional', item.sistema)}
+    `;
+  }
+
+  if (item.tipo === 'Monitor') {
+    return `
+      ${detalheLinha('Computador conectado', item.computador)}
+      ${detalheLinha('Modelo', item.modelo)}
+      ${detalheLinha('Fabricante', item.fabricante)}
+    `;
+  }
+
+  if (item.tipo === 'Impressora') {
+    return `
+      ${detalheLinha('IP', item.ip)}
+      ${detalheLinha('Fabricante', item.fabricante)}
+      ${detalheLinha('Modelo', item.modelo)}
+    `;
+  }
+
+  return '';
+}
+
+function renderModal(item, carregando = false) {
+  if (!modalAtivo || !modalAtivoBody) return;
+
+  if (modalAtivoTitulo) {
+    modalAtivoTitulo.textContent = item?.nome || 'Ativo GLPI';
+  }
+
+  if (carregando) {
+    modalAtivoBody.innerHTML = '<p class="glpi-loading">Carregando detalhes do ativo...</p>';
+    return;
+  }
+
+  modalAtivoBody.innerHTML = `
+    <div class="detail-grid">
+      ${detalheLinha('Tipo', item.tipo)}
+      ${detalheLinha('Nome', item.nome)}
+      ${detalheLinha('Serial', item.serial)}
+      ${detalheStatus('Status', item.status)}
+      ${detalheLinha('Localização', item.localizacao)}
+      ${detalheLinha('Entidade', item.entidade)}
+      ${montarDetalhesExtras(item)}
+    </div>
+  `;
+}
+
+async function abrirModalAtivo(item) {
+  if (!modalAtivo || !modalAtivoBody) return;
+
+  modalAtivo.hidden = false;
+  renderModal(item, true);
+
+  try {
+    const params = new URLSearchParams();
+    params.set('detalhe', '1');
+    params.set('tipo_ativo', item.tipo);
+    params.set('id', item.id);
+
+    const resposta = await fetch(`/api/ativos-glpi?${params.toString()}`);
+    const resultado = await resposta.json();
+
+    if (!resposta.ok || !resultado.ok) {
+      throw new Error(resultado.message || 'Erro ao carregar detalhes do ativo.');
+    }
+
+    renderModal({ ...item, ...(resultado.data || {}) });
+  } catch (error) {
+    modalAtivoBody.innerHTML = `
+      <p class="form-message form-message--error">${escaparHtml(error.message || 'Erro ao carregar detalhes do ativo.')}</p>
+      <div class="detail-grid">
+        ${detalheLinha('Tipo', item.tipo)}
+        ${detalheLinha('Nome', item.nome)}
+        ${detalheLinha('Serial', item.serial)}
+        ${detalheStatus('Status', item.status)}
+        ${detalheLinha('Localização', item.localizacao)}
+        ${detalheLinha('Entidade', item.entidade)}
+      </div>
+    `;
+  }
+}
+
+function fecharModalAtivo() {
+  if (modalAtivo) modalAtivo.hidden = true;
 }
 
 async function carregarAtivos() {
@@ -189,6 +324,12 @@ async function carregarAtivos() {
 btnBuscar.addEventListener('click', carregarAtivos);
 tipoEl.addEventListener('change', carregarAtivos);
 
+if (buscaEl) {
+  buscaEl.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') carregarAtivos();
+  });
+}
+
 if (ordenacaoEl) {
   ordenacaoEl.addEventListener('change', () => {
     paginaAtual = 1;
@@ -196,6 +337,20 @@ if (ordenacaoEl) {
     rolarParaResultados();
   });
 }
+
+if (btnFecharModal) {
+  btnFecharModal.addEventListener('click', fecharModalAtivo);
+}
+
+if (modalAtivo) {
+  modalAtivo.addEventListener('click', (event) => {
+    if (event.target === modalAtivo) fecharModalAtivo();
+  });
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') fecharModalAtivo();
+});
 
 (async () => {
   const session = await requireAuth(window.location.pathname);
