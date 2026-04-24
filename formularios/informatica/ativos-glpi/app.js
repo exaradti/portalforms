@@ -34,6 +34,7 @@ function renderAtivos(lista) {
       <td>${item.serial || '-'}</td>
       <td>${item.status || '-'}</td>
       <td>${item.localizacao || '-'}</td>
+      <td>${item.entidade || '-'}</td>
     `;
 
     tabela.appendChild(tr);
