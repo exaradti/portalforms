@@ -99,6 +99,22 @@
       </section>
     </main>
 
+
+    <div class="modal-backdrop" id="modalAtivo" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalAtivoTitulo">
+        <div class="modal-header">
+          <div>
+            <span class="hero__eyebrow">Detalhes do ativo</span>
+            <h2 id="modalAtivoTitulo">Ativo GLPI</h2>
+          </div>
+          <button type="button" class="modal-close" id="btnFecharModal" aria-label="Fechar detalhes">×</button>
+        </div>
+        <div class="modal-body" id="modalAtivoBody">
+          <p class="glpi-loading">Carregando detalhes...</p>
+        </div>
+      </div>
+    </div>
+
     <footer class="footer">
       <p>© 2026 Grupo Examina e Radiológica</p>
     </footer>
