@@ -7,24 +7,22 @@ const buscaEl = document.getElementById('busca');
 const ordenacaoEl = document.getElementById('ordenacao');
 const resumoEl = document.getElementById('resumoResultados');
 const paginacaoEl = document.getElementById('paginacao');
-const modalAtivo = document.getElementById('modalAtivo');
-const modalAtivoBody = document.getElementById('modalAtivoBody');
-const modalAtivoTitulo = document.getElementById('modalAtivoTitulo');
-const btnFecharModal = document.getElementById('btnFecharModal');
 
 let listaAtual = [];
 let paginaAtual = 1;
 const itensPorPagina = 50;
 
-function escaparHtml(valor) {
-  return (valor ?? '-')
-    .toString()
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+/* =========================
+   🔧 CORREÇÃO DE HTML ENTITY
+========================= */
+function decodificarHtml(valor) {
+  const texto = (valor || '').toString();
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = texto;
+  return textarea.value;
 }
+
+/* ========================= */
 
 function ordenarLista(lista) {
   const tipo = ordenacaoEl?.value || 'asc';
@@ -52,13 +50,6 @@ function classeStatus(status) {
   return 'status--neutro';
 }
 
-function rolarParaResultados() {
-  document.querySelector('.results-shell')?.scrollIntoView({
-    behavior: 'smooth',
-    block: 'start'
-  });
-}
-
 function renderLoading() {
   tabela.innerHTML = '<tr><td colspan="6" class="glpi-loading">Carregando ativos do GLPI...</td></tr>';
   if (resumoEl) resumoEl.textContent = 'Carregando ativos...';
@@ -72,7 +63,7 @@ function renderEmpty() {
 }
 
 function renderErro(msg) {
-  tabela.innerHTML = `<tr><td colspan="6" class="glpi-empty">${escaparHtml(msg)}</td></tr>`;
+  tabela.innerHTML = `<tr><td colspan="6" class="glpi-empty">${msg}</td></tr>`;
   if (resumoEl) resumoEl.textContent = 'Erro ao carregar ativos';
   if (paginacaoEl) paginacaoEl.innerHTML = '';
 }
@@ -125,16 +116,14 @@ function renderPaginacao(total) {
     btn.addEventListener('click', () => {
       const acao = btn.dataset.page;
 
-      if (acao === 'prev' && paginaAtual > 1) {
-        paginaAtual--;
-      }
-
-      if (acao === 'next' && paginaAtual < totalPaginas) {
-        paginaAtual++;
-      }
+      if (acao === 'prev' && paginaAtual > 1) paginaAtual--;
+      if (acao === 'next' && paginaAtual < totalPaginas) paginaAtual++;
 
       renderAtivos(ordenarLista(listaAtual));
-      rolarParaResultados();
+
+      document.querySelector('.results-shell')?.scrollIntoView({
+        behavior: 'smooth'
+      });
     });
   });
 }
@@ -152,22 +141,25 @@ function renderAtivos(lista) {
 
   pagina.forEach((item) => {
     const tr = document.createElement('tr');
-    const statusTexto = item.status || '-';
+    const statusTexto = decodificarHtml(item.status || '-');
 
     tr.innerHTML = `
-      <td>${escaparHtml(item.tipo || '-')}</td>
-      <td><strong>${escaparHtml(item.nome || '-')}</strong></td>
-      <td>${escaparHtml(item.serial || '-')}</td>
+      <td>${decodificarHtml(item.tipo || '-')}</td>
+      <td><strong>${decodificarHtml(item.nome || '-')}</strong></td>
+      <td>${decodificarHtml(item.serial || '-')}</td>
       <td>
         <span class="status-badge ${classeStatus(statusTexto)}">
-          ${escaparHtml(statusTexto)}
+          ${statusTexto}
         </span>
       </td>
-      <td>${escaparHtml(item.localizacao || '-')}</td>
-      <td>${escaparHtml(item.entidade || '-')}</td>
+      <td>${decodificarHtml(item.localizacao || '-')}</td>
+      <td>${decodificarHtml(item.entidade || '-')}</td>
     `;
 
-    tr.addEventListener('click', () => abrirModalAtivo(item));
+    tr.addEventListener('click', () => {
+      abrirModalAtivo(item);
+    });
+
     tabela.appendChild(tr);
   });
 
@@ -175,125 +167,56 @@ function renderAtivos(lista) {
   renderPaginacao(total);
 }
 
-function detalheLinha(rotulo, valor) {
-  return `
-    <div class="detail-label">${escaparHtml(rotulo)}</div>
-    <div class="detail-value">${escaparHtml(valor || '-')}</div>
-  `;
-}
+/* =========================
+   MODAL
+========================= */
 
-function detalheStatus(rotulo, valor) {
-  const status = valor || '-';
-  return `
-    <div class="detail-label">${escaparHtml(rotulo)}</div>
-    <div class="detail-value">
-      <span class="status-badge ${classeStatus(status)}">${escaparHtml(status)}</span>
-    </div>
-  `;
-}
+const modalAtivo = document.getElementById('modalAtivo');
+const modalAtivoBody = document.getElementById('modalAtivoBody');
+const btnFecharModal = document.getElementById('btnFecharModal');
 
-function montarDetalhesExtras(item) {
-  if (item.tipo === 'Computador') {
-    return `
-      ${detalheLinha('IP', item.ip)}
-      ${detalheLinha('Sistema operacional', item.sistema)}
-      ${detalheLinha('Processador', item.processador)}
-      ${detalheLinha('Memória RAM', item.memoria)}
-      ${detalheLinha('Armazenamento', item.armazenamento)}
-      ${detalheLinha('Fabricante', item.fabricante)}
-      ${detalheLinha('Modelo', item.modelo)}
-    `;
-  }
-
-  if (item.tipo === 'Telefone') {
-    return `
-      ${detalheLinha('IP', item.ip)}
-      ${detalheLinha('Sistema operacional', item.sistema)}
-    `;
-  }
-
-  if (item.tipo === 'Monitor') {
-    return `
-      ${detalheLinha('Computador conectado', item.computador)}
-      ${detalheLinha('Modelo', item.modelo)}
-      ${detalheLinha('Fabricante', item.fabricante)}
-    `;
-  }
-
-  if (item.tipo === 'Impressora') {
-    return `
-      ${detalheLinha('IP', item.ip)}
-      ${detalheLinha('Fabricante', item.fabricante)}
-      ${detalheLinha('Modelo', item.modelo)}
-    `;
-  }
-
-  return '';
-}
-
-function renderModal(item, carregando = false) {
+function abrirModalAtivo(item) {
   if (!modalAtivo || !modalAtivoBody) return;
-
-  if (modalAtivoTitulo) {
-    modalAtivoTitulo.textContent = item?.nome || 'Ativo GLPI';
-  }
-
-  if (carregando) {
-    modalAtivoBody.innerHTML = '<p class="glpi-loading">Carregando detalhes do ativo...</p>';
-    return;
-  }
 
   modalAtivoBody.innerHTML = `
     <div class="detail-grid">
-      ${detalheLinha('Tipo', item.tipo)}
-      ${detalheLinha('Nome', item.nome)}
-      ${detalheLinha('Serial', item.serial)}
-      ${detalheStatus('Status', item.status)}
-      ${detalheLinha('Localização', item.localizacao)}
-      ${detalheLinha('Entidade', item.entidade)}
-      ${montarDetalhesExtras(item)}
+      <div class="detail-label">Tipo</div><div class="detail-value">${decodificarHtml(item.tipo)}</div>
+      <div class="detail-label">Nome</div><div class="detail-value">${decodificarHtml(item.nome)}</div>
+      <div class="detail-label">Serial</div><div class="detail-value">${decodificarHtml(item.serial)}</div>
+      <div class="detail-label">Status</div>
+      <div class="detail-value">
+        <span class="status-badge ${classeStatus(item.status)}">${decodificarHtml(item.status)}</span>
+      </div>
+      <div class="detail-label">Localização</div><div class="detail-value">${decodificarHtml(item.localizacao)}</div>
+      <div class="detail-label">Entidade</div><div class="detail-value">${decodificarHtml(item.entidade)}</div>
+      <div class="detail-label">IP</div><div class="detail-value">${decodificarHtml(item.ip || '-')}</div>
+      <div class="detail-label">Sistema operacional</div><div class="detail-value">${decodificarHtml(item.sistema || '-')}</div>
+      <div class="detail-label">Processador</div><div class="detail-value">${decodificarHtml(item.processador || '-')}</div>
+      <div class="detail-label">Memória RAM</div><div class="detail-value">${decodificarHtml(item.memoria || '-')}</div>
+      <div class="detail-label">Armazenamento</div><div class="detail-value">${decodificarHtml(item.armazenamento || '-')}</div>
+      <div class="detail-label">Fabricante</div><div class="detail-value">${decodificarHtml(item.fabricante || '-')}</div>
+      <div class="detail-label">Modelo</div><div class="detail-value">${decodificarHtml(item.modelo || '-')}</div>
     </div>
   `;
-}
-
-async function abrirModalAtivo(item) {
-  if (!modalAtivo || !modalAtivoBody) return;
 
   modalAtivo.hidden = false;
-  renderModal(item, true);
-
-  try {
-    const params = new URLSearchParams();
-    params.set('detalhe', '1');
-    params.set('tipo_ativo', item.tipo);
-    params.set('id', item.id);
-
-    const resposta = await fetch(`/api/ativos-glpi?${params.toString()}`);
-    const resultado = await resposta.json();
-
-    if (!resposta.ok || !resultado.ok) {
-      throw new Error(resultado.message || 'Erro ao carregar detalhes do ativo.');
-    }
-
-    renderModal({ ...item, ...(resultado.data || {}) });
-  } catch (error) {
-    modalAtivoBody.innerHTML = `
-      <p class="form-message form-message--error">${escaparHtml(error.message || 'Erro ao carregar detalhes do ativo.')}</p>
-      <div class="detail-grid">
-        ${detalheLinha('Tipo', item.tipo)}
-        ${detalheLinha('Nome', item.nome)}
-        ${detalheLinha('Serial', item.serial)}
-        ${detalheStatus('Status', item.status)}
-        ${detalheLinha('Localização', item.localizacao)}
-        ${detalheLinha('Entidade', item.entidade)}
-      </div>
-    `;
-  }
 }
 
 function fecharModalAtivo() {
-  if (modalAtivo) modalAtivo.hidden = true;
+  modalAtivo.hidden = true;
 }
+
+btnFecharModal?.addEventListener('click', fecharModalAtivo);
+
+modalAtivo?.addEventListener('click', (e) => {
+  if (e.target === modalAtivo) fecharModalAtivo();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') fecharModalAtivo();
+});
+
+/* ========================= */
 
 async function carregarAtivos() {
   renderLoading();
@@ -324,32 +247,9 @@ async function carregarAtivos() {
 btnBuscar.addEventListener('click', carregarAtivos);
 tipoEl.addEventListener('change', carregarAtivos);
 
-if (buscaEl) {
-  buscaEl.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') carregarAtivos();
-  });
-}
-
-if (ordenacaoEl) {
-  ordenacaoEl.addEventListener('change', () => {
-    paginaAtual = 1;
-    renderAtivos(ordenarLista(listaAtual));
-    rolarParaResultados();
-  });
-}
-
-if (btnFecharModal) {
-  btnFecharModal.addEventListener('click', fecharModalAtivo);
-}
-
-if (modalAtivo) {
-  modalAtivo.addEventListener('click', (event) => {
-    if (event.target === modalAtivo) fecharModalAtivo();
-  });
-}
-
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') fecharModalAtivo();
+ordenacaoEl?.addEventListener('change', () => {
+  paginaAtual = 1;
+  renderAtivos(ordenarLista(listaAtual));
 });
 
 (async () => {
