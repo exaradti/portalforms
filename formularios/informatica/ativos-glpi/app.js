@@ -4,12 +4,12 @@ const tabela = document.getElementById('tabela');
 const btnBuscar = document.getElementById('btnBuscar');
 const tipoEl = document.getElementById('tipo');
 const buscaEl = document.getElementById('busca');
-
 const ordenacaoEl = document.getElementById('ordenacao');
+
 let listaAtual = [];
 
 function ordenarLista(lista) {
-  const tipo = ordenacaoEl.value;
+  const tipo = ordenacaoEl?.value || 'asc';
 
   return [...lista].sort((a, b) => {
     const nomeA = a.nome || '';
@@ -25,15 +25,15 @@ function ordenarLista(lista) {
 }
 
 function renderLoading() {
-  tabela.innerHTML = '<tr><td colspan="5" class="glpi-loading">Carregando ativos do GLPI...</td></tr>';
+  tabela.innerHTML = '<tr><td colspan="6" class="glpi-loading">Carregando ativos do GLPI...</td></tr>';
 }
 
 function renderEmpty() {
-  tabela.innerHTML = '<tr><td colspan="5" class="glpi-empty">Nenhum ativo encontrado.</td></tr>';
+  tabela.innerHTML = '<tr><td colspan="6" class="glpi-empty">Nenhum ativo encontrado.</td></tr>';
 }
 
 function renderErro(msg) {
-  tabela.innerHTML = `<tr><td colspan="5" class="glpi-empty">${msg}</td></tr>`;
+  tabela.innerHTML = `<tr><td colspan="6" class="glpi-empty">${msg}</td></tr>`;
 }
 
 function renderAtivos(lista) {
@@ -78,7 +78,8 @@ async function carregarAtivos() {
       throw new Error(resultado.message || 'Erro ao consultar ativos no GLPI.');
     }
 
-    renderAtivos(resultado.data || []);
+    listaAtual = resultado.data || [];
+    renderAtivos(ordenarLista(listaAtual));
   } catch (error) {
     renderErro(error.message || 'Erro ao carregar ativos.');
   }
@@ -86,6 +87,12 @@ async function carregarAtivos() {
 
 btnBuscar.addEventListener('click', carregarAtivos);
 tipoEl.addEventListener('change', carregarAtivos);
+
+if (ordenacaoEl) {
+  ordenacaoEl.addEventListener('change', () => {
+    renderAtivos(ordenarLista(listaAtual));
+  });
+}
 
 (async () => {
   const session = await requireAuth(window.location.pathname);
