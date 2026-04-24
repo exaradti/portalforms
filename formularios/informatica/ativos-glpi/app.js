@@ -5,6 +5,7 @@ const btnBuscar = document.getElementById('btnBuscar');
 const tipoEl = document.getElementById('tipo');
 const buscaEl = document.getElementById('busca');
 const ordenacaoEl = document.getElementById('ordenacao');
+const resumoEl = document.getElementById('resumoResultados');
 
 let listaAtual = [];
 
@@ -26,14 +27,26 @@ function ordenarLista(lista) {
 
 function renderLoading() {
   tabela.innerHTML = '<tr><td colspan="6" class="glpi-loading">Carregando ativos do GLPI...</td></tr>';
+
+  if (resumoEl) {
+    resumoEl.textContent = 'Carregando ativos...';
+  }
 }
 
 function renderEmpty() {
   tabela.innerHTML = '<tr><td colspan="6" class="glpi-empty">Nenhum ativo encontrado.</td></tr>';
+
+  if (resumoEl) {
+    resumoEl.textContent = '0 ativos encontrados';
+  }
 }
 
 function renderErro(msg) {
   tabela.innerHTML = `<tr><td colspan="6" class="glpi-empty">${msg}</td></tr>`;
+
+  if (resumoEl) {
+    resumoEl.textContent = 'Erro ao carregar ativos';
+  }
 }
 
 function renderAtivos(lista) {
@@ -79,6 +92,11 @@ async function carregarAtivos() {
     }
 
     listaAtual = resultado.data || [];
+
+    if (resumoEl) {
+      resumoEl.textContent = `${listaAtual.length} ativo(s) encontrado(s)`;
+    }
+
     renderAtivos(ordenarLista(listaAtual));
   } catch (error) {
     renderErro(error.message || 'Erro ao carregar ativos.');
