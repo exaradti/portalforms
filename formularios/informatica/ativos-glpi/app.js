@@ -5,6 +5,25 @@ const btnBuscar = document.getElementById('btnBuscar');
 const tipoEl = document.getElementById('tipo');
 const buscaEl = document.getElementById('busca');
 
+const ordenacaoEl = document.getElementById('ordenacao');
+let listaAtual = [];
+
+function ordenarLista(lista) {
+  const tipo = ordenacaoEl.value;
+
+  return [...lista].sort((a, b) => {
+    const nomeA = a.nome || '';
+    const nomeB = b.nome || '';
+
+    const resultado = nomeA.localeCompare(nomeB, 'pt-BR', {
+      numeric: true,
+      sensitivity: 'base'
+    });
+
+    return tipo === 'asc' ? resultado : resultado * -1;
+  });
+}
+
 function renderLoading() {
   tabela.innerHTML = '<tr><td colspan="5" class="glpi-loading">Carregando ativos do GLPI...</td></tr>';
 }
