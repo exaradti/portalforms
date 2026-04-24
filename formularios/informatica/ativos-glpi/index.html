@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ativos GLPI</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="page-shell">
+
+    <header class="hero">
+      <div class="hero__logo-wrap">
+        <img src="/assets/logo-grupo.png" class="hero__logo">
+      </div>
+
+      <div class="hero__content">
+        <span class="hero__eyebrow">Informática</span>
+        <h1>Ativos do GLPI</h1>
+
+        <div class="page-actions">
+          <a href="/formularios/informatica/index.html" class="btn-link">
+            ← Voltar
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+
+      <div class="form-card">
+        <h2>Consulta de ativos</h2>
+
+        <div class="form-grid">
+          <div class="field">
+            <label>Tipo</label>
+            <select id="tipo">
+              <option value="todos">Todos</option>
+              <option value="computador">Computadores</option>
+              <option value="monitor">Monitores</option>
+              <option value="impressora">Impressoras</option>
+              <option value="telefone">Telefones</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Buscar</label>
+            <input type="text" id="busca" placeholder="Nome ou serial">
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button id="btnBuscar">Buscar</button>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <h2>Resultados</h2>
+
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Nome</th>
+              <th>Serial</th>
+              <th>Status</th>
+              <th>Localização</th>
+            </tr>
+          </thead>
+          <tbody id="tabela"></tbody>
+        </table>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="/assets/supabase-config.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

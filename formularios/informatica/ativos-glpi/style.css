@@ -1,0 +1,51 @@
+/* ===== ATIVOS GLPI ===== */
+
+.glpi-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.glpi-table th,
+.glpi-table td {
+  padding: 10px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  font-size: 14px;
+}
+
+.glpi-table th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+.glpi-table tr:hover {
+  background: #f1f5f9;
+}
+
+.glpi-loading {
+  text-align: center;
+  padding: 20px;
+  color: #6b7280;
+}
+
+.glpi-empty {
+  text-align: center;
+  padding: 20px;
+  color: #9ca3af;
+}
+
+/* Botão padrão alinhado com seu sistema */
+.glpi-btn {
+  background: #22c55e;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.glpi-btn:hover {
+  background: #16a34a;
+}
