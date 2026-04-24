@@ -3,77 +3,96 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ativos GLPI</title>
+  <title>Ativos GLPI | Informática</title>
+  <meta name="description" content="Consulta de ativos cadastrados no GLPI.">
   <link rel="stylesheet" href="/assets/style.css">
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <div class="page-shell">
-
     <header class="hero">
       <div class="hero__logo-wrap">
-        <img src="/assets/logo-grupo.png" class="hero__logo">
+        <img
+          src="/assets/logo-grupo.png"
+          alt="Logos Radiológica e Examina"
+          class="hero__logo"
+        >
       </div>
 
       <div class="hero__content">
         <span class="hero__eyebrow">Informática</span>
         <h1>Ativos do GLPI</h1>
+        <p>Consulte os ativos cadastrados no GLPI por tipo, nome ou serial.</p>
 
         <div class="page-actions">
           <a href="/formularios/informatica/index.html" class="btn-link">
-            ← Voltar
+            ← Voltar para formulários de informática
           </a>
         </div>
       </div>
     </header>
 
     <main class="container">
-
-      <div class="form-card">
-        <h2>Consulta de ativos</h2>
-
-        <div class="form-grid">
-          <div class="field">
-            <label>Tipo</label>
-            <select id="tipo">
-              <option value="todos">Todos</option>
-              <option value="computador">Computadores</option>
-              <option value="monitor">Monitores</option>
-              <option value="impressora">Impressoras</option>
-              <option value="telefone">Telefones</option>
-            </select>
+      <section class="form-shell">
+        <div class="form-card">
+          <div class="form-card__header">
+            <h2>Consulta de ativos</h2>
+            <p>A listagem é carregada automaticamente em ordem crescente. Use os filtros apenas se quiser refinar a busca.</p>
           </div>
 
-          <div class="field">
-            <label>Buscar</label>
-            <input type="text" id="busca" placeholder="Nome ou serial">
+          <div class="form-grid">
+            <div class="field">
+              <label for="tipo">Tipo</label>
+              <select id="tipo">
+                <option value="todos">Todos</option>
+                <option value="computador">Computadores</option>
+                <option value="monitor">Monitores</option>
+                <option value="impressora">Impressoras</option>
+                <option value="telefone">Telefones</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="busca">Buscar</label>
+              <input type="text" id="busca" placeholder="Nome, serial, localização ou entidade">
+            </div>
+
+            <div class="form-actions">
+              <button type="button" id="btnBuscar" class="glpi-btn">Buscar</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="results-shell">
+        <div class="toolbar">
+          <div>
+            <h2>Resultados</h2>
+            <p id="resumoResultados">Carregando ativos...</p>
           </div>
         </div>
 
-        <div class="form-actions">
-          <button id="btnBuscar">Buscar</button>
+        <div class="table-wrap">
+          <table class="glpi-table">
+            <thead>
+              <tr>
+                <th>Tipo</th>
+                <th>Nome</th>
+                <th>Serial</th>
+                <th>Status</th>
+                <th>Localização</th>
+                <th>Entidade</th>
+              </tr>
+            </thead>
+            <tbody id="tabela"></tbody>
+          </table>
         </div>
-      </div>
-
-      <div class="form-card">
-        <h2>Resultados</h2>
-
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Tipo</th>
-              <th>Nome</th>
-              <th>Serial</th>
-              <th>Status</th>
-              <th>Localização</th>
-              <th>Entidade</th>
-            </tr>
-          </thead>
-          <tbody id="tabela"></tbody>
-        </table>
-      </div>
-
+      </section>
     </main>
+
+    <footer class="footer">
+      <p>© 2026 Grupo Examina e Radiológica</p>
+    </footer>
   </div>
 
   <script src="/assets/supabase-config.js"></script>
