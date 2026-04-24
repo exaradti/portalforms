@@ -38,6 +38,13 @@ function classeStatus(status) {
   return 'status--neutro';
 }
 
+function rolarParaResultados() {
+  document.querySelector('.results-shell')?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start'
+  });
+}
+
 function renderLoading() {
   tabela.innerHTML = '<tr><td colspan="6" class="glpi-loading">Carregando ativos do GLPI...</td></tr>';
   if (resumoEl) resumoEl.textContent = 'Carregando ativos...';
@@ -113,6 +120,7 @@ function renderPaginacao(total) {
       }
 
       renderAtivos(ordenarLista(listaAtual));
+      rolarParaResultados();
     });
   });
 }
@@ -185,6 +193,7 @@ if (ordenacaoEl) {
   ordenacaoEl.addEventListener('change', () => {
     paginaAtual = 1;
     renderAtivos(ordenarLista(listaAtual));
+    rolarParaResultados();
   });
 }
 
