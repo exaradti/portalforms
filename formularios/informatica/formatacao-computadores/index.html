@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Formulário de Formatação de Computadores | Informática</title>
+  <meta name="description" content="Registro de formatação de computadores da área de Informática.">
+  <link rel="stylesheet" href="/assets/style.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero__logo-wrap">
+        <img
+          src="/assets/logo-grupo.png"
+          alt="Logos Radiológica e Examina"
+          class="hero__logo"
+        >
+      </div>
+
+      <div class="hero__content">
+        <span class="hero__eyebrow">Formulários Informática</span>
+        <h1>Formulário de Formatação de Computadores</h1>
+        <div class="page-actions">
+          <a href="/formularios/informatica/index.html" class="btn-link" aria-label="Voltar para formulários de informática">← Voltar para Informática</a>
+          <a href="/index.html" class="btn-link" aria-label="Voltar para a central de formulários">Central de Formulários</a>
+
+          <div class="user-menu" id="userMenu" hidden>
+            <button
+              type="button"
+              class="btn-link user-menu__trigger"
+              id="userMenuBtn"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              <span id="authUserName">Usuário</span> ▾
+            </button>
+
+            <div class="user-menu__dropdown" id="userMenuDropdown" hidden>
+              <button type="button" class="user-menu__logout" data-auth-logout>Sair</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section id="loadingAuth" class="loading-box" aria-live="polite">Validando acesso...</section>
+
+      <div id="conteudoProtegido" class="protected-content" hidden>
+        <section class="form-shell" aria-labelledby="titulo-form-formatacao">
+          <div class="form-card">
+            <div class="form-card__header">
+              <h2 id="titulo-form-formatacao">Dados da formatação</h2>
+              <p>Preencha os dados do computador formatado. O técnico é identificado automaticamente pelo login e o registro também é enviado por e-mail.</p>
+            </div>
+
+            <form id="formFormatacaoComputadores" novalidate>
+              <div class="form-grid">
+                <div class="field">
+                  <label for="nome_computador">Nome do computador</label>
+                  <input type="text" id="nome_computador" name="nome_computador" placeholder="Ex.: PC-RECEPCAO-01" required>
+                </div>
+
+                <div class="field">
+                  <label for="ip_computador">IP</label>
+                  <input type="text" id="ip_computador" name="ip_computador" placeholder="Ex.: 10.10.10.25" required>
+                </div>
+
+                <div class="field field--full programas-field">
+                  <span class="field-label">Programas instalados</span>
+                  <div class="checkbox-group" id="programas_instalados_group">
+                    <label class="checkbox-option"><input type="checkbox" name="programas_instalados" value="GLPI-Agent"> <span>GLPI-Agent</span></label>
+                    <label class="checkbox-option"><input type="checkbox" name="programas_instalados" value="Kaspersky Agent"> <span>Kaspersky Agent</span></label>
+                    <label class="checkbox-option"><input type="checkbox" name="programas_instalados" value="VNC"> <span>VNC</span></label>
+                    <label class="checkbox-option"><input type="checkbox" name="programas_instalados" value="Libre Office"> <span>Libre Office</span></label>
+                    <label class="checkbox-option"><input type="checkbox" name="programas_instalados" value="Clinux"> <span>Clinux</span></label>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="setor">Setor</label>
+                  <input type="text" id="setor" name="setor" placeholder="Ex.: Recepção" required>
+                </div>
+
+                <div class="field">
+                  <label for="unidade">Unidade</label>
+                  <select id="unidade" name="unidade" required>
+                    <option value="">Carregando unidades...</option>
+                  </select>
+                </div>
+
+                <div class="field field--full">
+                  <label for="motivo_formatacao">Descrição do motivo</label>
+                  <textarea id="motivo_formatacao" name="motivo_formatacao" rows="6" placeholder="Descreva o motivo da formatação, problemas encontrados, observações técnicas e qualquer detalhe importante para atualização posterior no GLPI." required></textarea>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="btn-submit">Registrar formatação</button>
+                <button type="button" class="btn-secondary" id="btnLimpar">Limpar</button>
+              </div>
+
+              <div id="mensagemFormulario" class="form-message" aria-live="polite"></div>
+            </form>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <p>© 2026 Grupo Examina e Radiológica</p>
+    </footer>
+  </div>
+
+  <script src="/assets/supabase-config.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

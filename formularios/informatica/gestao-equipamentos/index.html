@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestão de Equipamentos | Grupo Examina e Radiológica</title>
+  <meta name="description" content="Tela de gestão dos registros de trocas e instalações de equipamentos.">
+  <link rel="stylesheet" href="/assets/style.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero__logo-wrap">
+        <img src="/assets/logo-grupo.png" alt="Logos Radiológica e Examina" class="hero__logo">
+      </div>
+
+      <div class="hero__content">
+        <span class="hero__eyebrow">Gestão de Equipamentos</span>
+        <h1>Gestão de Trocas e Instalações</h1>
+        <p>Acompanhe o que já foi registrado, filtre por período e marque o que já foi replicado no GLPI.</p>
+
+        <div class="page-actions">
+          <a href="/formularios/informatica/index.html" class="btn-link">← Voltar para formulários de informática</a>
+
+          <div class="user-menu" id="userMenu" hidden>
+            <button type="button" class="btn-link user-menu__trigger" id="userMenuBtn" aria-haspopup="true" aria-expanded="false">
+              <span id="authUserName">Usuário</span> ▾
+            </button>
+            <div class="user-menu__dropdown" id="userMenuDropdown" hidden>
+              <button type="button" class="user-menu__logout" data-auth-logout>Sair</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section id="loadingAuth" class="loading-box" aria-live="polite">Validando acesso...</section>
+
+      <div id="conteudoProtegido" class="protected-content" hidden>
+        <section class="form-shell">
+          <div class="form-card filters-card">
+            <div class="form-card__header">
+              <h2>Filtros</h2>
+              <p>Use os filtros abaixo para localizar registros e controlar a pendência no GLPI.</p>
+            </div>
+
+            <form id="formFiltros" class="form-grid" autocomplete="off">
+              <div class="field">
+                <label for="data_inicio">Data inicial</label>
+                <input type="date" id="data_inicio" name="data_inicio">
+              </div>
+
+              <div class="field">
+                <label for="data_fim">Data final</label>
+                <input type="date" id="data_fim" name="data_fim">
+              </div>
+
+              <div class="field">
+                <label for="origem">Origem</label>
+                <select id="origem" name="origem">
+                  <option value="">Todas</option>
+                  <option value="troca">Troca</option>
+                  <option value="instalacao">Instalação</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="tipo_ativo">Tipo de equipamento</label>
+                <select id="tipo_ativo" name="tipo_ativo">
+                  <option value="">Todos</option>
+                  <option value="Computador">Computador</option>
+                  <option value="Monitor">Monitor</option>
+                  <option value="Impressora">Impressora</option>
+                  <option value="Tablet">Tablet</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="unidade">Unidade</label>
+                <select id="unidade" name="unidade">
+                  <option value="">Todas</option>
+                  <option value="Examina Filial">Examina Filial</option>
+                  <option value="Examina Matriz">Examina Matriz</option>
+                  <option value="Radiologica General Osório">Radiologica General Osório</option>
+                  <option value="Radiologica Olaria">Radiologica Olaria</option>
+                  <option value="Unimed">Unimed</option>
+                  <option value="CD">CD</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="status_glpi">Status GLPI</label>
+                <select id="status_glpi" name="status_glpi">
+                  <option value="">Todos</option>
+                  <option value="pendente">Pendente</option>
+                  <option value="registrado">Registrado</option>
+                </select>
+              </div>
+
+
+
+
+
+
+              <div class="field field--full filter-actions">
+                <button type="submit" class="btn-submit" id="btnFiltrar">Filtrar</button>
+                <button type="button" class="btn-secondary" id="btnLimparFiltros">Limpar filtros</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="results-shell">
+          <div class="toolbar">
+            <div>
+              <h2>Resultados</h2>
+              <p id="resumoResultados">Carregando registros...</p>
+            </div>
+          </div>
+
+          <p id="mensagemTela" class="form-message"></p>
+
+          <div class="table-wrap">
+            <table class="management-table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Origem</th>
+                  <th>Tipo</th>
+                  <th>Equipamento</th>
+                  <th>Unidade / Setor</th>
+                  <th>Técnico</th>
+                  <th>Status GLPI</th>
+                  <th>Tag GLPI</th>
+                  <th>Ação</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyRegistros"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <p>© 2026 Grupo Examina e Radiológica</p>
+    </footer>
+  </div>
+
+  <script src="/assets/supabase-config.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
