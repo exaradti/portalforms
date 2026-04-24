@@ -209,3 +209,74 @@
     grid-template-columns: 1fr;
   }
 }
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 86px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.status--ativo {
+  background: #ebf9ef;
+  color: #156b33;
+  border-color: #9fd9ad;
+}
+
+.status--inativo {
+  background: #f3f4f6;
+  color: #4b5563;
+  border-color: #d1d5db;
+}
+
+.status--manutencao {
+  background: #fff4df;
+  color: #8a5a00;
+  border-color: #f3d68a;
+}
+
+.status--neutro {
+  background: #eef2ff;
+  color: #3730a3;
+  border-color: #c7d2fe;
+}
+
+.pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+.pagination__btn {
+  min-height: 40px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--brand-neutral);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pagination__btn:hover:not(:disabled) {
+  background: #f7f9fc;
+}
+
+.pagination__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pagination__info {
+  color: var(--text-soft);
+  font-weight: 700;
+}
