@@ -12,7 +12,7 @@ function mapTipo(tipo) {
     { endpoint: 'Computer', label: 'Computador' },
     { endpoint: 'Monitor', label: 'Monitor' },
     { endpoint: 'Printer', label: 'Impressora' },
-    { endpoint: 'Phone', label: 'Telefone' } // 👈 NOVO
+    { endpoint: 'Phone', label: 'Telefone' }
   ];
 }
 
@@ -31,6 +31,7 @@ async function iniciarSessao(env) {
   }
 
   const data = await resposta.json();
+
   if (!data.session_token) {
     throw new Error('GLPI não retornou session_token.');
   }
@@ -51,13 +52,16 @@ async function encerrarSessao(env, sessionToken) {
 }
 
 async function buscarAtivosPorTipo(env, sessionToken, endpoint, label) {
-  const resposta = await fetch(`${env.GLPI_URL}/${endpoint}?range=0-999`, {
-    method: 'GET',
-    headers: {
-      'App-Token': env.GLPI_APP_TOKEN,
-      'Session-Token': sessionToken
+  const resposta = await fetch(
+    `${env.GLPI_URL}/${endpoint}?range=0-999&expand_dropdowns=true`,
+    {
+      method: 'GET',
+      headers: {
+        'App-Token': env.GLPI_APP_TOKEN,
+        'Session-Token': sessionToken
+      }
     }
-  });
+  );
 
   if (!resposta.ok) {
     const texto = await resposta.text();
@@ -71,7 +75,8 @@ async function buscarAtivosPorTipo(env, sessionToken, endpoint, label) {
     nome: normalizarTexto(item.name),
     serial: normalizarTexto(item.serial),
     status: normalizarTexto(item.states_id),
-    localizacao: normalizarTexto(item.locations_id)
+    localizacao: normalizarTexto(item.locations_id),
+    entidade: normalizarTexto(item.entities_id)
   }));
 }
 
@@ -98,14 +103,19 @@ export async function onRequestGet(context) {
     if (busca) {
       ativos = ativos.filter((item) =>
         item.nome.toLowerCase().includes(busca) ||
-        item.serial.toLowerCase().includes(busca)
+        item.serial.toLowerCase().includes(busca) ||
+        item.localizacao.toLowerCase().includes(busca) ||
+        item.entidade.toLowerCase().includes(busca)
       );
     }
 
     ativos.sort((a, b) => {
       const nomeA = a.nome || '';
       const nomeB = b.nome || '';
-      return nomeA.localeCompare(nomeB, 'pt-BR', { numeric: true, sensitivity: 'base' });
+      return nomeA.localeCompare(nomeB, 'pt-BR', {
+        numeric: true,
+        sensitivity: 'base'
+      });
     });
 
     return Response.json({
