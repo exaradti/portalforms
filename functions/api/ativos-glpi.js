@@ -1,27 +1,23 @@
 function normalizarTexto(valor) {
   if (valor === null || valor === undefined || valor === '') return '';
+
   if (typeof valor === 'object') {
     if (valor.name) return String(valor.name).trim();
     if (valor.completename) return String(valor.completename).trim();
     if (valor.value) return String(valor.value).trim();
+    if (valor.id) return String(valor.id).trim();
     return '';
   }
+
   return String(valor).trim();
 }
 
 function primeiroTexto(...valores) {
   for (const valor of valores) {
     const texto = normalizarTexto(valor);
-    if (texto) return texto;
+    if (texto && texto !== '0') return texto;
   }
   return '-';
-}
-
-function primeiroValor(...valores) {
-  for (const valor of valores) {
-    if (valor !== null && valor !== undefined && valor !== '') return valor;
-  }
-  return null;
 }
 
 function mapTipo(tipo) {
@@ -40,10 +36,12 @@ function mapTipo(tipo) {
 
 function getTipoPorLabel(label) {
   const valor = normalizarTexto(label).toLowerCase();
+
   if (valor === 'computador') return { endpoint: 'Computer', label: 'Computador', tipo: 'computador' };
   if (valor === 'monitor') return { endpoint: 'Monitor', label: 'Monitor', tipo: 'monitor' };
   if (valor === 'impressora') return { endpoint: 'Printer', label: 'Impressora', tipo: 'impressora' };
   if (valor === 'telefone') return { endpoint: 'Phone', label: 'Telefone', tipo: 'telefone' };
+
   return null;
 }
 
@@ -84,6 +82,7 @@ async function encerrarSessao(env, sessionToken) {
 
 async function glpiGet(env, sessionToken, path) {
   const separador = path.includes('?') ? '&' : '?';
+
   const resposta = await fetch(`${env.GLPI_URL}/${path}${separador}expand_dropdowns=true`, {
     method: 'GET',
     headers: {
@@ -108,48 +107,61 @@ async function glpiGetOpcional(env, sessionToken, path) {
   }
 }
 
-function extrairNomeRelacao(valor) {
-  if (!valor) return '';
-  if (typeof valor === 'string' || typeof valor === 'number') return String(valor).trim();
-  if (Array.isArray(valor)) {
-    const primeiro = valor[0];
-    return extrairNomeRelacao(primeiro);
+function extrairIpDeObjeto(obj) {
+  if (!obj) return '';
+
+  if (typeof obj === 'string' || typeof obj === 'number') {
+    const texto = String(obj).trim();
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(texto)) return texto;
+    return '';
   }
-  return normalizarTexto(valor.name || valor.completename || valor.value || valor.id);
-}
 
-function extrairIpDeObjeto(item) {
-  const candidatos = [
-    item.ip,
-    item.ip_address,
-    item.ipaddresses_id,
-    item.address,
-    item.addresses,
-    item.networkports_id,
-    item.networks,
-    item.NetworkPort,
-    item.networkport
-  ];
-
-  for (const candidato of candidatos) {
-    if (!candidato) continue;
-    if (typeof candidato === 'string' || typeof candidato === 'number') {
-      const texto = String(candidato).trim();
-      if (texto && texto !== '0') return texto;
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const ip = extrairIpDeObjeto(item);
+      if (ip) return ip;
     }
-    if (Array.isArray(candidato)) {
-      for (const sub of candidato) {
-        const ip = extrairIpDeObjeto(sub || {});
-        if (ip && ip !== '-') return ip;
+    return '';
+  }
+
+  if (typeof obj === 'object') {
+    const camposIp = [
+      'ip',
+      'ip_address',
+      'address',
+      'name',
+      'value'
+    ];
+
+    for (const campo of camposIp) {
+      const valor = obj[campo];
+      if (typeof valor === 'string' || typeof valor === 'number') {
+        const texto = String(valor).trim();
+        if (/^\d{1,3}(\.\d{1,3}){3}$/.test(texto)) return texto;
       }
     }
-    if (typeof candidato === 'object') {
-      const ip = extrairIpDeObjeto(candidato);
-      if (ip && ip !== '-') return ip;
+
+    for (const valor of Object.values(obj)) {
+      const ip = extrairIpDeObjeto(valor);
+      if (ip) return ip;
     }
   }
 
   return '';
+}
+
+function numeroParaGB(valor) {
+  if (valor === null || valor === undefined || valor === '') return '';
+
+  const texto = String(valor).replace(',', '.').trim();
+  const numero = Number(texto);
+
+  if (!Number.isFinite(numero) || numero <= 0) return '';
+
+  const gb = numero >= 1024 ? numero / 1024 : numero;
+  const arredondado = Math.round(gb * 10) / 10;
+
+  return `${arredondado.toLocaleString('pt-BR')} GB`;
 }
 
 function extrairTextoLista(lista, camposPreferidos = []) {
@@ -158,14 +170,31 @@ function extrairTextoLista(lista, camposPreferidos = []) {
   return lista
     .map((item) => {
       if (!item) return '';
+
       for (const campo of camposPreferidos) {
         const texto = normalizarTexto(item[campo]);
-        if (texto) return texto;
+        if (texto && texto !== '0') return texto;
       }
+
       return primeiroTexto(item.designation, item.name, item.type, item.serial, item.id);
     })
     .filter(Boolean)
     .join(', ');
+}
+
+function somarCampoNumerico(lista, campos = []) {
+  if (!Array.isArray(lista)) return 0;
+
+  return lista.reduce((total, item) => {
+    if (!item) return total;
+
+    for (const campo of campos) {
+      const valor = Number(String(item[campo] ?? '').replace(',', '.'));
+      if (Number.isFinite(valor) && valor > 0) return total + valor;
+    }
+
+    return total;
+  }, 0);
 }
 
 function normalizarAtivo(item, endpoint, label, tipoInterno) {
@@ -185,16 +214,21 @@ function normalizarAtivo(item, endpoint, label, tipoInterno) {
 async function buscarAtivosPorTipo(env, sessionToken, endpoint, label, tipoInterno) {
   const data = await glpiGet(env, sessionToken, `${endpoint}?range=0-999`);
 
-  return (Array.isArray(data) ? data : []).map((item) => normalizarAtivo(item, endpoint, label, tipoInterno));
+  return (Array.isArray(data) ? data : [])
+    .map((item) => normalizarAtivo(item, endpoint, label, tipoInterno));
 }
 
 async function buscarIp(env, sessionToken, endpoint, id, itemCompleto) {
-  const ipDireto = extrairIpDeObjeto(itemCompleto || {});
+  const ipDireto = extrairIpDeObjeto(itemCompleto);
   if (ipDireto) return ipDireto;
 
   const portas = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/NetworkPort`);
-  const ipPortas = extrairIpDeObjeto(portas || {});
+  const ipPortas = extrairIpDeObjeto(portas);
   if (ipPortas) return ipPortas;
+
+  const ips = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/IPAddress`);
+  const ipIps = extrairIpDeObjeto(ips);
+  if (ipIps) return ipIps;
 
   return '-';
 }
@@ -206,29 +240,46 @@ async function buscarDetalhesHardware(env, sessionToken, endpoint, id) {
     glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_DeviceHardDrive`)
   ]);
 
+  const memoriaTotal = somarCampoNumerico(memorias, ['size', 'capacity']);
+  const discoTotal = somarCampoNumerico(discos, ['capacity', 'size']);
+
   return {
     processador: extrairTextoLista(processadores, ['designation', 'name', 'deviceprocessors_id']) || '-',
-    memoria: extrairTextoLista(memorias, ['designation', 'name', 'size', 'devicememories_id']) || '-',
-    armazenamento: extrairTextoLista(discos, ['designation', 'name', 'capacity', 'deviceharddrives_id']) || '-'
+    memoria: memoriaTotal ? numeroParaGB(memoriaTotal) : (extrairTextoLista(memorias, ['size', 'capacity', 'designation', 'name']) || '-'),
+    armazenamento: discoTotal ? numeroParaGB(discoTotal) : (extrairTextoLista(discos, ['capacity', 'size', 'designation', 'name']) || '-')
   };
+}
+
+async function buscarComputadorRelacionado(env, sessionToken, item) {
+  const idComputador = normalizarTexto(item.computers_id || item.computer_id || item.items_id);
+  if (!idComputador || idComputador === '0') {
+    return primeiroTexto(item.computer_name, item.item_name);
+  }
+
+  const computador = await glpiGetOpcional(env, sessionToken, `Computer/${idComputador}`);
+  return primeiroTexto(computador?.name, item.computer_name, item.item_name, idComputador);
 }
 
 async function buscarDetalheAtivo(env, sessionToken, tipo, id) {
   const tipoInfo = getTipoPorLabel(tipo) || mapTipo(tipo)[0];
-  if (!tipoInfo || !id) throw new Error('Tipo ou ID inválido para detalhe do ativo.');
+
+  if (!tipoInfo || !id) {
+    throw new Error('Tipo ou ID inválido para detalhe do ativo.');
+  }
 
   const item = await glpiGet(env, sessionToken, `${tipoInfo.endpoint}/${id}`);
   const base = normalizarAtivo(item, tipoInfo.endpoint, tipoInfo.label, tipoInfo.tipo);
 
   if (tipoInfo.tipo === 'computador') {
     const hardware = await buscarDetalhesHardware(env, sessionToken, tipoInfo.endpoint, id);
+
     return {
       ...base,
       ip: await buscarIp(env, sessionToken, tipoInfo.endpoint, id, item),
       sistema: primeiroTexto(item.operatingsystems_id, item.operatingsystem_name, item.os, item.os_name),
       processador: primeiroTexto(item.cpu, item.processors_id, hardware.processador),
-      memoria: primeiroTexto(item.memory, item.ram, hardware.memoria),
-      armazenamento: primeiroTexto(item.disk, item.storage, hardware.armazenamento),
+      memoria: primeiroTexto(numeroParaGB(item.memory), numeroParaGB(item.ram), hardware.memoria),
+      armazenamento: primeiroTexto(numeroParaGB(item.disk), numeroParaGB(item.storage), hardware.armazenamento),
       fabricante: primeiroTexto(item.manufacturers_id),
       modelo: primeiroTexto(item.computermodels_id, item.model)
     };
@@ -238,7 +289,9 @@ async function buscarDetalheAtivo(env, sessionToken, tipo, id) {
     return {
       ...base,
       ip: await buscarIp(env, sessionToken, tipoInfo.endpoint, id, item),
-      sistema: primeiroTexto(item.operatingsystems_id, item.operatingsystem_name, item.os, item.os_name)
+      sistema: primeiroTexto(item.operatingsystems_id, item.operatingsystem_name, item.os, item.os_name),
+      fabricante: primeiroTexto(item.manufacturers_id),
+      modelo: primeiroTexto(item.phonemodels_id, item.model)
     };
   }
 
@@ -247,13 +300,7 @@ async function buscarDetalheAtivo(env, sessionToken, tipo, id) {
       ...base,
       modelo: primeiroTexto(item.monitormodels_id, item.model, item.models_id),
       fabricante: primeiroTexto(item.manufacturers_id),
-      computador: primeiroTexto(
-        item.computers_id,
-        item.computer_name,
-        item.items_id,
-        item.item_name,
-        extrairNomeRelacao(item.Computer)
-      )
+      computador: await buscarComputadorRelacionado(env, sessionToken, item)
     };
   }
 
@@ -309,6 +356,7 @@ export async function onRequestGet(context) {
     ativos.sort((a, b) => {
       const nomeA = a.nome || '';
       const nomeB = b.nome || '';
+
       return nomeA.localeCompare(nomeB, 'pt-BR', {
         numeric: true,
         sensitivity: 'base'
