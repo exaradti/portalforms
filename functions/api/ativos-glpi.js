@@ -5,6 +5,7 @@ function normalizarTexto(valor) {
     if (valor.name) return String(valor.name).trim();
     if (valor.completename) return String(valor.completename).trim();
     if (valor.value) return String(valor.value).trim();
+    if (valor.content) return String(valor.content).trim();
     if (valor.id) return String(valor.id).trim();
     return '';
   }
@@ -107,28 +108,48 @@ async function glpiGetOpcional(env, sessionToken, path) {
   }
 }
 
-function extrairIpsDeObjeto(obj, encontrados = new Set()) {
-  if (!obj) return encontrados;
+function ipValido(ip) {
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return false;
+
+  const partes = ip.split('.').map(Number);
+  if (partes.some((parte) => parte < 0 || parte > 255)) return false;
+
+  // Evita retornar rede/broadcast quando existir IP real.
+  if (partes[3] === 0 || partes[3] === 255) return false;
+
+  return true;
+}
+
+function extrairIpsDeObjeto(obj, encontrados = new Set(), redes = new Set()) {
+  if (!obj) return { encontrados, redes };
 
   if (typeof obj === 'string' || typeof obj === 'number') {
     const texto = String(obj).trim();
     const matches = texto.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g);
+
     if (matches) {
-      matches.forEach((ip) => encontrados.add(ip));
+      matches.forEach((ip) => {
+        if (ipValido(ip)) {
+          encontrados.add(ip);
+        } else {
+          redes.add(ip);
+        }
+      });
     }
-    return encontrados;
+
+    return { encontrados, redes };
   }
 
   if (Array.isArray(obj)) {
-    obj.forEach((item) => extrairIpsDeObjeto(item, encontrados));
-    return encontrados;
+    obj.forEach((item) => extrairIpsDeObjeto(item, encontrados, redes));
+    return { encontrados, redes };
   }
 
   if (typeof obj === 'object') {
-    Object.values(obj).forEach((valor) => extrairIpsDeObjeto(valor, encontrados));
+    Object.values(obj).forEach((valor) => extrairIpsDeObjeto(valor, encontrados, redes));
   }
 
-  return encontrados;
+  return { encontrados, redes };
 }
 
 function numeroParaGB(valor) {
@@ -139,14 +160,46 @@ function numeroParaGB(valor) {
 
   if (!Number.isFinite(numero) || numero <= 0) return '';
 
-  let gb = numero;
+  let gb;
 
-  if (numero >= 1024) {
+  // Alguns campos do GLPI/FusionInventory vêm em bytes.
+  if (numero > 1073741824) {
+    gb = numero / 1073741824;
+  } else if (numero > 1048576) {
+    // Alguns vêm em KB.
+    gb = numero / 1048576;
+  } else if (numero >= 1024) {
+    // Caso mais comum no GLPI: MB.
     gb = numero / 1024;
+  } else {
+    gb = numero;
   }
 
   const arredondado = Math.round(gb * 10) / 10;
   return `${arredondado.toLocaleString('pt-BR')} GB`;
+}
+
+function valorNumericoCampo(item, campo) {
+  const bruto = item?.[campo];
+  if (bruto === null || bruto === undefined || bruto === '') return 0;
+
+  const valor = Number(String(bruto).replace(',', '.'));
+  return Number.isFinite(valor) && valor > 0 ? valor : 0;
+}
+
+function somarCampoNumerico(lista, campos = []) {
+  if (!Array.isArray(lista)) return 0;
+
+  return lista.reduce((total, item) => {
+    if (!item) return total;
+
+    for (const campo of campos) {
+      const valor = valorNumericoCampo(item, campo);
+      if (valor > 0) return total + valor;
+    }
+
+    return total;
+  }, 0);
 }
 
 function extrairTextoLista(lista, camposPreferidos = []) {
@@ -174,23 +227,6 @@ function extrairTextoLista(lista, camposPreferidos = []) {
     .join(', ');
 }
 
-function somarCampoNumerico(lista, campos = []) {
-  if (!Array.isArray(lista)) return 0;
-
-  return lista.reduce((total, item) => {
-    if (!item) return total;
-
-    for (const campo of campos) {
-      const valor = Number(String(item[campo] ?? '').replace(',', '.'));
-      if (Number.isFinite(valor) && valor > 0) {
-        return total + valor;
-      }
-    }
-
-    return total;
-  }, 0);
-}
-
 function normalizarAtivo(item, endpoint, label, tipoInterno) {
   return {
     id: item.id,
@@ -213,22 +249,21 @@ async function buscarAtivosPorTipo(env, sessionToken, endpoint, label, tipoInter
 }
 
 async function buscarIp(env, sessionToken, endpoint, id, itemCompleto) {
-  const ips = extrairIpsDeObjeto(itemCompleto);
-  if (ips.size) return Array.from(ips).join(', ');
+  const coletados = new Set();
+  const redes = new Set();
+
+  extrairIpsDeObjeto(itemCompleto, coletados, redes);
 
   const portas = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/NetworkPort`);
-  const ipsPortas = extrairIpsDeObjeto(portas);
-  if (ipsPortas.size) return Array.from(ipsPortas).join(', ');
+  extrairIpsDeObjeto(portas, coletados, redes);
 
   if (Array.isArray(portas)) {
-    const encontrados = new Set();
-
     for (const porta of portas) {
       const portaId = porta?.id;
       if (!portaId) continue;
 
       const nomesRede = await glpiGetOpcional(env, sessionToken, `NetworkPort/${portaId}/NetworkName`);
-      extrairIpsDeObjeto(nomesRede, encontrados);
+      extrairIpsDeObjeto(nomesRede, coletados, redes);
 
       if (Array.isArray(nomesRede)) {
         for (const nomeRede of nomesRede) {
@@ -236,17 +271,17 @@ async function buscarIp(env, sessionToken, endpoint, id, itemCompleto) {
           if (!nomeRedeId) continue;
 
           const ipsRede = await glpiGetOpcional(env, sessionToken, `NetworkName/${nomeRedeId}/IPAddress`);
-          extrairIpsDeObjeto(ipsRede, encontrados);
+          extrairIpsDeObjeto(ipsRede, coletados, redes);
         }
       }
     }
-
-    if (encontrados.size) return Array.from(encontrados).join(', ');
   }
 
   const ipsDireto = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/IPAddress`);
-  const ipsDiretoExtraidos = extrairIpsDeObjeto(ipsDireto);
-  if (ipsDiretoExtraidos.size) return Array.from(ipsDiretoExtraidos).join(', ');
+  extrairIpsDeObjeto(ipsDireto, coletados, redes);
+
+  if (coletados.size) return Array.from(coletados).join(', ');
+  if (redes.size) return Array.from(redes).join(', ');
 
   return '-';
 }
@@ -256,6 +291,9 @@ async function buscarSistemaOperacional(env, sessionToken, endpoint, id, item) {
     item.operatingsystems_id,
     item.operatingsystem_name,
     item.operatingsystem,
+    item.operatingsystemversions_id,
+    item.operatingsystem_version,
+    item.operatingsystemservicepacks_id,
     item.os,
     item.os_name
   );
@@ -271,7 +309,9 @@ async function buscarSistemaOperacional(env, sessionToken, endpoint, id, item) {
         os.operatingsystem_name,
         os.name,
         os.version,
-        os.operatingsystemversions_id
+        os.operatingsystemversions_id,
+        os.operatingsystemservicepacks_id,
+        os.operatingsystemarchitectures_id
       ))
       .filter((x) => x && x !== '-');
 
@@ -279,6 +319,54 @@ async function buscarSistemaOperacional(env, sessionToken, endpoint, id, item) {
   }
 
   return '-';
+}
+
+function extrairCapacidadeDisco(item) {
+  if (!item) return 0;
+
+  const camposDiretos = [
+    'capacity',
+    'size',
+    'totalsize',
+    'total_size',
+    'disksize',
+    'logical_volume_size',
+    'harddrive_size',
+    'storage',
+    'bytes'
+  ];
+
+  for (const campo of camposDiretos) {
+    const valor = valorNumericoCampo(item, campo);
+    if (valor > 0) return valor;
+  }
+
+  // Alguns retornos trazem a capacidade dentro do nome/designação: "500 GB", "488,4 GiB", etc.
+  const texto = [
+    item.name,
+    item.designation,
+    item.comment,
+    item.deviceharddrives_id
+  ].map(normalizarTexto).join(' ');
+
+  const match = texto.match(/(\d+(?:[\.,]\d+)?)\s*(tb|gb|gib|mb|mib)/i);
+  if (!match) return 0;
+
+  const numero = Number(match[1].replace(',', '.'));
+  if (!Number.isFinite(numero) || numero <= 0) return 0;
+
+  const unidade = match[2].toLowerCase();
+  if (unidade === 'tb') return numero * 1024;
+  if (unidade === 'gb' || unidade === 'gib') return numero;
+  if (unidade === 'mb' || unidade === 'mib') return numero;
+
+  return 0;
+}
+
+function somarDiscos(lista) {
+  if (!Array.isArray(lista)) return 0;
+
+  return lista.reduce((total, item) => total + extrairCapacidadeDisco(item), 0);
 }
 
 async function buscarDetalhesHardware(env, sessionToken, endpoint, id) {
@@ -291,24 +379,16 @@ async function buscarDetalhesHardware(env, sessionToken, endpoint, id) {
   const memoriaTotal = somarCampoNumerico(memorias, [
     'size',
     'capacity',
-    'frequence',
     'memory'
   ]);
 
-  const discoTotal = somarCampoNumerico(discos, [
-    'capacity',
-    'size',
-    'totalsize',
-    'total_size',
-    'disksize'
-  ]);
+  const discoTotal = somarDiscos(discos);
 
   return {
     processador: extrairTextoLista(processadores, [
       'designation',
       'name',
-      'deviceprocessors_id',
-      'frequence'
+      'deviceprocessors_id'
     ]) || '-',
 
     memoria: memoriaTotal
@@ -317,7 +397,18 @@ async function buscarDetalhesHardware(env, sessionToken, endpoint, id) {
 
     armazenamento: discoTotal
       ? numeroParaGB(discoTotal)
-      : (extrairTextoLista(discos, ['capacity', 'size', 'totalsize', 'designation', 'name']) || '-')
+      : (extrairTextoLista(discos, [
+          'capacity',
+          'size',
+          'totalsize',
+          'total_size',
+          'disksize',
+          'logical_volume_size',
+          'harddrive_size',
+          'designation',
+          'name',
+          'deviceharddrives_id'
+        ]) || '-')
   };
 }
 
