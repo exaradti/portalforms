@@ -8,21 +8,20 @@ const ordenacaoEl = document.getElementById('ordenacao');
 const resumoEl = document.getElementById('resumoResultados');
 const paginacaoEl = document.getElementById('paginacao');
 
+const modalAtivo = document.getElementById('modalAtivo');
+const modalAtivoBody = document.getElementById('modalAtivoBody');
+const btnFecharModal = document.getElementById('btnFecharModal');
+
 let listaAtual = [];
 let paginaAtual = 1;
 const itensPorPagina = 50;
 
-/* =========================
-   🔧 CORREÇÃO DE HTML ENTITY
-========================= */
 function decodificarHtml(valor) {
-  const texto = (valor || '').toString();
+  const texto = (valor || '-').toString();
   const textarea = document.createElement('textarea');
   textarea.innerHTML = texto;
-  return textarea.value;
+  return textarea.value || '-';
 }
-
-/* ========================= */
 
 function ordenarLista(lista) {
   const tipo = ordenacaoEl?.value || 'asc';
@@ -63,7 +62,7 @@ function renderEmpty() {
 }
 
 function renderErro(msg) {
-  tabela.innerHTML = `<tr><td colspan="6" class="glpi-empty">${msg}</td></tr>`;
+  tabela.innerHTML = `<tr><td colspan="6" class="glpi-empty">${decodificarHtml(msg)}</td></tr>`;
   if (resumoEl) resumoEl.textContent = 'Erro ao carregar ativos';
   if (paginacaoEl) paginacaoEl.innerHTML = '';
 }
@@ -156,10 +155,7 @@ function renderAtivos(lista) {
       <td>${decodificarHtml(item.entidade || '-')}</td>
     `;
 
-    tr.addEventListener('click', () => {
-      abrirModalAtivo(item);
-    });
-
+    tr.addEventListener('click', () => abrirModalAtivo(item));
     tabela.appendChild(tr);
   });
 
@@ -167,43 +163,102 @@ function renderAtivos(lista) {
   renderPaginacao(total);
 }
 
-/* =========================
-   MODAL
-========================= */
+function linhaDetalhe(label, valor) {
+  return `
+    <div class="detail-label">${label}</div>
+    <div class="detail-value">${decodificarHtml(valor || '-')}</div>
+  `;
+}
 
-const modalAtivo = document.getElementById('modalAtivo');
-const modalAtivoBody = document.getElementById('modalAtivoBody');
-const btnFecharModal = document.getElementById('btnFecharModal');
+function renderModal(item) {
+  const statusTexto = decodificarHtml(item.status || '-');
 
-function abrirModalAtivo(item) {
-  if (!modalAtivo || !modalAtivoBody) return;
+  let extras = '';
+
+  if (item.tipo === 'Computador') {
+    extras = `
+      ${linhaDetalhe('IP', item.ip)}
+      ${linhaDetalhe('Sistema operacional', item.sistema)}
+      ${linhaDetalhe('Processador', item.processador)}
+      ${linhaDetalhe('Memória RAM', item.memoria)}
+      ${linhaDetalhe('Armazenamento', item.armazenamento)}
+      ${linhaDetalhe('Fabricante', item.fabricante)}
+      ${linhaDetalhe('Modelo', item.modelo)}
+    `;
+  }
+
+  if (item.tipo === 'Telefone') {
+    extras = `
+      ${linhaDetalhe('IP', item.ip)}
+      ${linhaDetalhe('Sistema operacional', item.sistema)}
+      ${linhaDetalhe('Fabricante', item.fabricante)}
+      ${linhaDetalhe('Modelo', item.modelo)}
+    `;
+  }
+
+  if (item.tipo === 'Monitor') {
+    extras = `
+      ${linhaDetalhe('Computador conectado', item.computador)}
+      ${linhaDetalhe('Fabricante', item.fabricante)}
+      ${linhaDetalhe('Modelo', item.modelo)}
+    `;
+  }
+
+  if (item.tipo === 'Impressora') {
+    extras = `
+      ${linhaDetalhe('IP', item.ip)}
+      ${linhaDetalhe('Fabricante', item.fabricante)}
+      ${linhaDetalhe('Modelo', item.modelo)}
+    `;
+  }
 
   modalAtivoBody.innerHTML = `
     <div class="detail-grid">
-      <div class="detail-label">Tipo</div><div class="detail-value">${decodificarHtml(item.tipo)}</div>
-      <div class="detail-label">Nome</div><div class="detail-value">${decodificarHtml(item.nome)}</div>
-      <div class="detail-label">Serial</div><div class="detail-value">${decodificarHtml(item.serial)}</div>
+      ${linhaDetalhe('Tipo', item.tipo)}
+      ${linhaDetalhe('Nome', item.nome)}
+      ${linhaDetalhe('Serial', item.serial)}
       <div class="detail-label">Status</div>
       <div class="detail-value">
-        <span class="status-badge ${classeStatus(item.status)}">${decodificarHtml(item.status)}</span>
+        <span class="status-badge ${classeStatus(statusTexto)}">${statusTexto}</span>
       </div>
-      <div class="detail-label">Localização</div><div class="detail-value">${decodificarHtml(item.localizacao)}</div>
-      <div class="detail-label">Entidade</div><div class="detail-value">${decodificarHtml(item.entidade)}</div>
-      <div class="detail-label">IP</div><div class="detail-value">${decodificarHtml(item.ip || '-')}</div>
-      <div class="detail-label">Sistema operacional</div><div class="detail-value">${decodificarHtml(item.sistema || '-')}</div>
-      <div class="detail-label">Processador</div><div class="detail-value">${decodificarHtml(item.processador || '-')}</div>
-      <div class="detail-label">Memória RAM</div><div class="detail-value">${decodificarHtml(item.memoria || '-')}</div>
-      <div class="detail-label">Armazenamento</div><div class="detail-value">${decodificarHtml(item.armazenamento || '-')}</div>
-      <div class="detail-label">Fabricante</div><div class="detail-value">${decodificarHtml(item.fabricante || '-')}</div>
-      <div class="detail-label">Modelo</div><div class="detail-value">${decodificarHtml(item.modelo || '-')}</div>
+      ${linhaDetalhe('Localização', item.localizacao)}
+      ${linhaDetalhe('Entidade', item.entidade)}
+      ${extras}
     </div>
   `;
+}
+
+async function abrirModalAtivo(item) {
+  if (!modalAtivo || !modalAtivoBody) return;
 
   modalAtivo.hidden = false;
+  modalAtivoBody.innerHTML = '<div class="glpi-loading">Carregando detalhes do ativo...</div>';
+
+  try {
+    const params = new URLSearchParams();
+    params.set('detalhe', '1');
+    params.set('id', item.id);
+    params.set('tipo_ativo', item.tipo);
+
+    const resposta = await fetch(`/api/ativos-glpi?${params.toString()}`);
+    const resultado = await resposta.json();
+
+    if (!resposta.ok || !resultado.ok) {
+      throw new Error(resultado.message || 'Erro ao carregar detalhes do ativo.');
+    }
+
+    renderModal(resultado.data || item);
+  } catch (error) {
+    modalAtivoBody.innerHTML = `
+      <div class="glpi-empty">
+        ${decodificarHtml(error.message || 'Erro ao carregar detalhes.')}
+      </div>
+    `;
+  }
 }
 
 function fecharModalAtivo() {
-  modalAtivo.hidden = true;
+  if (modalAtivo) modalAtivo.hidden = true;
 }
 
 btnFecharModal?.addEventListener('click', fecharModalAtivo);
@@ -215,8 +270,6 @@ modalAtivo?.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') fecharModalAtivo();
 });
-
-/* ========================= */
 
 async function carregarAtivos() {
   renderLoading();
