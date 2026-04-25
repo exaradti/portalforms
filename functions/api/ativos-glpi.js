@@ -114,7 +114,6 @@ function ipValido(ip) {
   const partes = ip.split('.').map(Number);
   if (partes.some((parte) => parte < 0 || parte > 255)) return false;
 
-  // Evita retornar rede/broadcast quando existir IP real.
   if (partes[3] === 0 || partes[3] === 255) return false;
 
   return true;
@@ -162,14 +161,11 @@ function numeroParaGB(valor) {
 
   let gb;
 
-  // Alguns campos do GLPI/FusionInventory vêm em bytes.
   if (numero > 1073741824) {
     gb = numero / 1073741824;
   } else if (numero > 1048576) {
-    // Alguns vêm em KB.
     gb = numero / 1048576;
   } else if (numero >= 1024) {
-    // Caso mais comum no GLPI: MB.
     gb = numero / 1024;
   } else {
     gb = numero;
@@ -220,6 +216,10 @@ function extrairTextoLista(lista, camposPreferidos = []) {
         item.type,
         item.serial,
         item.manufacturers_id,
+        item.deviceprocessors_id,
+        item.devicememories_id,
+        item.deviceharddrives_id,
+        item.devicestorages_id,
         item.id
       );
     })
@@ -306,6 +306,7 @@ async function buscarSistemaOperacional(env, sessionToken, endpoint, id, item) {
     const nomes = relacoes
       .map((os) => primeiroTexto(
         os.operatingsystems_id,
+        os.operating_system,
         os.operatingsystem_name,
         os.name,
         os.version,
@@ -333,7 +334,10 @@ function extrairCapacidadeDisco(item) {
     'logical_volume_size',
     'harddrive_size',
     'storage',
-    'bytes'
+    'bytes',
+    'disk_size',
+    'volumesize',
+    'volume_size'
   ];
 
   for (const campo of camposDiretos) {
@@ -341,22 +345,23 @@ function extrairCapacidadeDisco(item) {
     if (valor > 0) return valor;
   }
 
-  // Alguns retornos trazem a capacidade dentro do nome/designação: "500 GB", "488,4 GiB", etc.
   const texto = [
     item.name,
     item.designation,
     item.comment,
-    item.deviceharddrives_id
+    item.deviceharddrives_id,
+    item.devicestorages_id,
+    item.type
   ].map(normalizarTexto).join(' ');
 
-  const match = texto.match(/(\d+(?:[\.,]\d+)?)\s*(tb|gb|gib|mb|mib)/i);
+  const match = texto.match(/(\d+(?:[\.,]\d+)?)\s*(tb|tib|gb|gib|mb|mib)/i);
   if (!match) return 0;
 
   const numero = Number(match[1].replace(',', '.'));
   if (!Number.isFinite(numero) || numero <= 0) return 0;
 
   const unidade = match[2].toLowerCase();
-  if (unidade === 'tb') return numero * 1024;
+  if (unidade === 'tb' || unidade === 'tib') return numero * 1024;
   if (unidade === 'gb' || unidade === 'gib') return numero;
   if (unidade === 'mb' || unidade === 'mib') return numero;
 
@@ -369,35 +374,76 @@ function somarDiscos(lista) {
   return lista.reduce((total, item) => total + extrairCapacidadeDisco(item), 0);
 }
 
+function juntarListas(...listas) {
+  return listas.flatMap((lista) => Array.isArray(lista) ? lista : []);
+}
+
 async function buscarDetalhesHardware(env, sessionToken, endpoint, id) {
-  const [processadores, memorias, discos] = await Promise.all([
+  const [
+    processadores1,
+    processadores2,
+    memorias1,
+    memorias2,
+    discosHardDrive,
+    discosStorage,
+    discosDrive,
+    discosDisk,
+    discosVolume
+  ] = await Promise.all([
     glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_DeviceProcessor`),
+    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/DeviceProcessor`),
     glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_DeviceMemory`),
-    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_DeviceHardDrive`)
+    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/DeviceMemory`),
+    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_DeviceHardDrive`),
+    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_DeviceStorage`),
+    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_DeviceDrive`),
+    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Disk`),
+    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Volume`)
   ]);
+
+  const processadores = juntarListas(processadores1, processadores2);
+  const memorias = juntarListas(memorias1, memorias2);
+
+  const discosFisicos = juntarListas(discosHardDrive, discosStorage, discosDrive);
+  const discosLogicos = juntarListas(discosDisk, discosVolume);
 
   const memoriaTotal = somarCampoNumerico(memorias, [
     'size',
     'capacity',
-    'memory'
+    'memory',
+    'total',
+    'totalsize',
+    'total_size'
   ]);
 
-  const discoTotal = somarDiscos(discos);
+  const discoFisicoTotal = somarDiscos(discosFisicos);
+  const discoLogicoTotal = somarDiscos(discosLogicos);
+  const discoTotal = discoFisicoTotal || discoLogicoTotal;
+
+  const listaDiscosFallback = discoFisicoTotal ? discosFisicos : discosLogicos;
 
   return {
     processador: extrairTextoLista(processadores, [
       'designation',
       'name',
-      'deviceprocessors_id'
+      'deviceprocessors_id',
+      'type'
     ]) || '-',
 
     memoria: memoriaTotal
       ? numeroParaGB(memoriaTotal)
-      : (extrairTextoLista(memorias, ['size', 'capacity', 'designation', 'name']) || '-'),
+      : (extrairTextoLista(memorias, [
+          'size',
+          'capacity',
+          'memory',
+          'designation',
+          'name',
+          'devicememories_id'
+        ]) || '-'),
 
     armazenamento: discoTotal
       ? numeroParaGB(discoTotal)
-      : (extrairTextoLista(discos, [
+      : (extrairTextoLista(listaDiscosFallback, [
           'capacity',
           'size',
           'totalsize',
@@ -405,22 +451,83 @@ async function buscarDetalhesHardware(env, sessionToken, endpoint, id) {
           'disksize',
           'logical_volume_size',
           'harddrive_size',
+          'disk_size',
+          'volumesize',
+          'volume_size',
           'designation',
           'name',
-          'deviceharddrives_id'
+          'deviceharddrives_id',
+          'devicestorages_id'
         ]) || '-')
   };
 }
 
-async function buscarComputadorRelacionado(env, sessionToken, item) {
-  const idComputador = normalizarTexto(item.computers_id || item.computer_id || item.items_id);
+function extrairNomesDeComputadores(obj) {
+  const nomes = new Set();
 
-  if (!idComputador || idComputador === '0') {
-    return primeiroTexto(item.computer_name, item.item_name);
+  function visitar(valor) {
+    if (!valor) return;
+
+    if (typeof valor === 'string') {
+      if (valor.trim()) nomes.add(valor.trim());
+      return;
+    }
+
+    if (Array.isArray(valor)) {
+      valor.forEach(visitar);
+      return;
+    }
+
+    if (typeof valor === 'object') {
+      const nome = primeiroTexto(
+        valor.name,
+        valor.completename,
+        valor.computer_name,
+        valor.item_name
+      );
+
+      if (nome && nome !== '-') {
+        nomes.add(nome);
+      }
+
+      Object.values(valor).forEach(visitar);
+    }
   }
 
-  const computador = await glpiGetOpcional(env, sessionToken, `Computer/${idComputador}`);
-  return primeiroTexto(computador?.name, item.computer_name, item.item_name, idComputador);
+  visitar(obj);
+
+  return Array.from(nomes)
+    .filter((nome) => nome && nome !== '0')
+    .join(', ');
+}
+
+async function buscarComputadorRelacionado(env, sessionToken, endpoint, id, item) {
+  const direto = primeiroTexto(
+    item.computers_id,
+    item.computer_id,
+    item.computer_name,
+    item.item_name
+  );
+
+  if (direto !== '-') {
+    const possivelId = normalizarTexto(item.computers_id || item.computer_id || item.items_id);
+    if (possivelId && possivelId !== '0' && /^\d+$/.test(possivelId)) {
+      const computador = await glpiGetOpcional(env, sessionToken, `Computer/${possivelId}`);
+      return primeiroTexto(computador?.name, direto);
+    }
+
+    return direto;
+  }
+
+  const conexoes = await Promise.all([
+    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Computer`),
+    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Connection`),
+    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_Computer`),
+    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Infocom`)
+  ]);
+
+  const nome = extrairNomesDeComputadores(conexoes);
+  return nome || '-';
 }
 
 async function buscarDetalheAtivo(env, sessionToken, tipo, id) {
@@ -463,7 +570,7 @@ async function buscarDetalheAtivo(env, sessionToken, tipo, id) {
       ...base,
       modelo: primeiroTexto(item.monitormodels_id, item.model, item.models_id),
       fabricante: primeiroTexto(item.manufacturers_id),
-      computador: await buscarComputadorRelacionado(env, sessionToken, item)
+      computador: await buscarComputadorRelacionado(env, sessionToken, tipoInfo.endpoint, id, item)
     };
   }
 
