@@ -107,47 +107,28 @@ async function glpiGetOpcional(env, sessionToken, path) {
   }
 }
 
-function extrairIpDeObjeto(obj) {
-  if (!obj) return '';
+function extrairIpsDeObjeto(obj, encontrados = new Set()) {
+  if (!obj) return encontrados;
 
   if (typeof obj === 'string' || typeof obj === 'number') {
     const texto = String(obj).trim();
-    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(texto)) return texto;
-    return '';
+    const matches = texto.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g);
+    if (matches) {
+      matches.forEach((ip) => encontrados.add(ip));
+    }
+    return encontrados;
   }
 
   if (Array.isArray(obj)) {
-    for (const item of obj) {
-      const ip = extrairIpDeObjeto(item);
-      if (ip) return ip;
-    }
-    return '';
+    obj.forEach((item) => extrairIpsDeObjeto(item, encontrados));
+    return encontrados;
   }
 
   if (typeof obj === 'object') {
-    const camposIp = [
-      'ip',
-      'ip_address',
-      'address',
-      'name',
-      'value'
-    ];
-
-    for (const campo of camposIp) {
-      const valor = obj[campo];
-      if (typeof valor === 'string' || typeof valor === 'number') {
-        const texto = String(valor).trim();
-        if (/^\d{1,3}(\.\d{1,3}){3}$/.test(texto)) return texto;
-      }
-    }
-
-    for (const valor of Object.values(obj)) {
-      const ip = extrairIpDeObjeto(valor);
-      if (ip) return ip;
-    }
+    Object.values(obj).forEach((valor) => extrairIpsDeObjeto(valor, encontrados));
   }
 
-  return '';
+  return encontrados;
 }
 
 function numeroParaGB(valor) {
@@ -158,9 +139,13 @@ function numeroParaGB(valor) {
 
   if (!Number.isFinite(numero) || numero <= 0) return '';
 
-  const gb = numero >= 1024 ? numero / 1024 : numero;
-  const arredondado = Math.round(gb * 10) / 10;
+  let gb = numero;
 
+  if (numero >= 1024) {
+    gb = numero / 1024;
+  }
+
+  const arredondado = Math.round(gb * 10) / 10;
   return `${arredondado.toLocaleString('pt-BR')} GB`;
 }
 
@@ -176,7 +161,14 @@ function extrairTextoLista(lista, camposPreferidos = []) {
         if (texto && texto !== '0') return texto;
       }
 
-      return primeiroTexto(item.designation, item.name, item.type, item.serial, item.id);
+      return primeiroTexto(
+        item.designation,
+        item.name,
+        item.type,
+        item.serial,
+        item.manufacturers_id,
+        item.id
+      );
     })
     .filter(Boolean)
     .join(', ');
@@ -190,7 +182,9 @@ function somarCampoNumerico(lista, campos = []) {
 
     for (const campo of campos) {
       const valor = Number(String(item[campo] ?? '').replace(',', '.'));
-      if (Number.isFinite(valor) && valor > 0) return total + valor;
+      if (Number.isFinite(valor) && valor > 0) {
+        return total + valor;
+      }
     }
 
     return total;
@@ -219,16 +213,70 @@ async function buscarAtivosPorTipo(env, sessionToken, endpoint, label, tipoInter
 }
 
 async function buscarIp(env, sessionToken, endpoint, id, itemCompleto) {
-  const ipDireto = extrairIpDeObjeto(itemCompleto);
-  if (ipDireto) return ipDireto;
+  const ips = extrairIpsDeObjeto(itemCompleto);
+  if (ips.size) return Array.from(ips).join(', ');
 
   const portas = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/NetworkPort`);
-  const ipPortas = extrairIpDeObjeto(portas);
-  if (ipPortas) return ipPortas;
+  const ipsPortas = extrairIpsDeObjeto(portas);
+  if (ipsPortas.size) return Array.from(ipsPortas).join(', ');
 
-  const ips = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/IPAddress`);
-  const ipIps = extrairIpDeObjeto(ips);
-  if (ipIps) return ipIps;
+  if (Array.isArray(portas)) {
+    const encontrados = new Set();
+
+    for (const porta of portas) {
+      const portaId = porta?.id;
+      if (!portaId) continue;
+
+      const nomesRede = await glpiGetOpcional(env, sessionToken, `NetworkPort/${portaId}/NetworkName`);
+      extrairIpsDeObjeto(nomesRede, encontrados);
+
+      if (Array.isArray(nomesRede)) {
+        for (const nomeRede of nomesRede) {
+          const nomeRedeId = nomeRede?.id;
+          if (!nomeRedeId) continue;
+
+          const ipsRede = await glpiGetOpcional(env, sessionToken, `NetworkName/${nomeRedeId}/IPAddress`);
+          extrairIpsDeObjeto(ipsRede, encontrados);
+        }
+      }
+    }
+
+    if (encontrados.size) return Array.from(encontrados).join(', ');
+  }
+
+  const ipsDireto = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/IPAddress`);
+  const ipsDiretoExtraidos = extrairIpsDeObjeto(ipsDireto);
+  if (ipsDiretoExtraidos.size) return Array.from(ipsDiretoExtraidos).join(', ');
+
+  return '-';
+}
+
+async function buscarSistemaOperacional(env, sessionToken, endpoint, id, item) {
+  const direto = primeiroTexto(
+    item.operatingsystems_id,
+    item.operatingsystem_name,
+    item.operatingsystem,
+    item.os,
+    item.os_name
+  );
+
+  if (direto !== '-') return direto;
+
+  const relacoes = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_OperatingSystem`);
+
+  if (Array.isArray(relacoes) && relacoes.length) {
+    const nomes = relacoes
+      .map((os) => primeiroTexto(
+        os.operatingsystems_id,
+        os.operatingsystem_name,
+        os.name,
+        os.version,
+        os.operatingsystemversions_id
+      ))
+      .filter((x) => x && x !== '-');
+
+    if (nomes.length) return nomes.join(', ');
+  }
 
   return '-';
 }
@@ -240,18 +288,42 @@ async function buscarDetalhesHardware(env, sessionToken, endpoint, id) {
     glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_DeviceHardDrive`)
   ]);
 
-  const memoriaTotal = somarCampoNumerico(memorias, ['size', 'capacity']);
-  const discoTotal = somarCampoNumerico(discos, ['capacity', 'size']);
+  const memoriaTotal = somarCampoNumerico(memorias, [
+    'size',
+    'capacity',
+    'frequence',
+    'memory'
+  ]);
+
+  const discoTotal = somarCampoNumerico(discos, [
+    'capacity',
+    'size',
+    'totalsize',
+    'total_size',
+    'disksize'
+  ]);
 
   return {
-    processador: extrairTextoLista(processadores, ['designation', 'name', 'deviceprocessors_id']) || '-',
-    memoria: memoriaTotal ? numeroParaGB(memoriaTotal) : (extrairTextoLista(memorias, ['size', 'capacity', 'designation', 'name']) || '-'),
-    armazenamento: discoTotal ? numeroParaGB(discoTotal) : (extrairTextoLista(discos, ['capacity', 'size', 'designation', 'name']) || '-')
+    processador: extrairTextoLista(processadores, [
+      'designation',
+      'name',
+      'deviceprocessors_id',
+      'frequence'
+    ]) || '-',
+
+    memoria: memoriaTotal
+      ? numeroParaGB(memoriaTotal)
+      : (extrairTextoLista(memorias, ['size', 'capacity', 'designation', 'name']) || '-'),
+
+    armazenamento: discoTotal
+      ? numeroParaGB(discoTotal)
+      : (extrairTextoLista(discos, ['capacity', 'size', 'totalsize', 'designation', 'name']) || '-')
   };
 }
 
 async function buscarComputadorRelacionado(env, sessionToken, item) {
   const idComputador = normalizarTexto(item.computers_id || item.computer_id || item.items_id);
+
   if (!idComputador || idComputador === '0') {
     return primeiroTexto(item.computer_name, item.item_name);
   }
@@ -276,7 +348,7 @@ async function buscarDetalheAtivo(env, sessionToken, tipo, id) {
     return {
       ...base,
       ip: await buscarIp(env, sessionToken, tipoInfo.endpoint, id, item),
-      sistema: primeiroTexto(item.operatingsystems_id, item.operatingsystem_name, item.os, item.os_name),
+      sistema: await buscarSistemaOperacional(env, sessionToken, tipoInfo.endpoint, id, item),
       processador: primeiroTexto(item.cpu, item.processors_id, hardware.processador),
       memoria: primeiroTexto(numeroParaGB(item.memory), numeroParaGB(item.ram), hardware.memoria),
       armazenamento: primeiroTexto(numeroParaGB(item.disk), numeroParaGB(item.storage), hardware.armazenamento),
@@ -289,7 +361,7 @@ async function buscarDetalheAtivo(env, sessionToken, tipo, id) {
     return {
       ...base,
       ip: await buscarIp(env, sessionToken, tipoInfo.endpoint, id, item),
-      sistema: primeiroTexto(item.operatingsystems_id, item.operatingsystem_name, item.os, item.os_name),
+      sistema: await buscarSistemaOperacional(env, sessionToken, tipoInfo.endpoint, id, item),
       fabricante: primeiroTexto(item.manufacturers_id),
       modelo: primeiroTexto(item.phonemodels_id, item.model)
     };
