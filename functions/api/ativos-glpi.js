@@ -496,25 +496,37 @@ function extrairNomesComputadoresDasConexoes(obj) {
 }
 
 async function buscarComputadorRelacionado(env, sessionToken, endpoint, id, item) {
-  const idDireto = normalizarTexto(item.computers_id || item.computer_id);
+  // 🔥 Fonte correta: aba "Conexões" do GLPI
+  const relacoes = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_Computer`);
 
-  if (idDireto && idDireto !== '0' && /^\d+$/.test(idDireto)) {
-    const computador = await glpiGetOpcional(env, sessionToken, `Computer/${idDireto}`);
-    const nome = nomeComputadorValido(computador?.name);
-    if (nome) return nome;
+  if (Array.isArray(relacoes) && relacoes.length) {
+    const nomes = [];
+
+    for (const rel of relacoes) {
+      // garante que é realmente ligação com computador
+      if (rel.itemtype === 'Computer' || rel.items_id) {
+        const compId = rel.items_id;
+
+        if (compId && /^\d+$/.test(String(compId))) {
+          const comp = await glpiGetOpcional(env, sessionToken, `Computer/${compId}`);
+
+          if (comp?.name) {
+            nomes.push(comp.name);
+          }
+        }
+      }
+    }
+
+    if (nomes.length) {
+      return nomes.join(', ');
+    }
   }
 
-  const nomeDireto = nomeComputadorValido(item.computer_name || item.item_name);
+  // fallback simples (caso raro)
+  const nomeDireto = normalizarTexto(item.computer_name || item.item_name);
   if (nomeDireto) return nomeDireto;
 
-  const conexoes = await Promise.all([
-    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Computer`),
-    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Connection`),
-    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_Computer`)
-  ]);
-
-  const nome = extrairNomesComputadoresDasConexoes(conexoes);
-  return nome || '-';
+  return '-';
 }
 
 async function buscarDetalheAtivo(env, sessionToken, tipo, id) {
