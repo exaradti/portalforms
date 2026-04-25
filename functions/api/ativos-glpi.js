@@ -6,7 +6,6 @@ function normalizarTexto(valor) {
     if (valor.completename) return String(valor.completename).trim();
     if (valor.value) return String(valor.value).trim();
     if (valor.content) return String(valor.content).trim();
-    if (valor.id) return String(valor.id).trim();
     return '';
   }
 
@@ -19,6 +18,17 @@ function primeiroTexto(...valores) {
     if (texto && texto !== '0') return texto;
   }
   return '-';
+}
+
+function textoValido(valor) {
+  const texto = normalizarTexto(valor);
+
+  if (!texto || texto === '0' || texto === '-') return '';
+  if (texto.includes('apirest.php')) return '';
+  if (texto.includes('http://') || texto.includes('https://')) return '';
+  if (texto.length > 120) return '';
+
+  return texto;
 }
 
 function mapTipo(tipo) {
@@ -128,11 +138,8 @@ function extrairIpsDeObjeto(obj, encontrados = new Set(), redes = new Set()) {
 
     if (matches) {
       matches.forEach((ip) => {
-        if (ipValido(ip)) {
-          encontrados.add(ip);
-        } else {
-          redes.add(ip);
-        }
+        if (ipValido(ip)) encontrados.add(ip);
+        else redes.add(ip);
       });
     }
 
@@ -196,35 +203,6 @@ function somarCampoNumerico(lista, campos = []) {
 
     return total;
   }, 0);
-}
-
-function extrairTextoLista(lista, camposPreferidos = []) {
-  if (!Array.isArray(lista) || !lista.length) return '';
-
-  return lista
-    .map((item) => {
-      if (!item) return '';
-
-      for (const campo of camposPreferidos) {
-        const texto = normalizarTexto(item[campo]);
-        if (texto && texto !== '0') return texto;
-      }
-
-      return primeiroTexto(
-        item.designation,
-        item.name,
-        item.type,
-        item.serial,
-        item.manufacturers_id,
-        item.deviceprocessors_id,
-        item.devicememories_id,
-        item.deviceharddrives_id,
-        item.devicestorages_id,
-        item.id
-      );
-    })
-    .filter(Boolean)
-    .join(', ');
 }
 
 function normalizarAtivo(item, endpoint, label, tipoInterno) {
@@ -370,7 +348,6 @@ function extrairCapacidadeDisco(item) {
 
 function somarDiscos(lista) {
   if (!Array.isArray(lista)) return 0;
-
   return lista.reduce((total, item) => total + extrairCapacidadeDisco(item), 0);
 }
 
@@ -378,12 +355,48 @@ function juntarListas(...listas) {
   return listas.flatMap((lista) => Array.isArray(lista) ? lista : []);
 }
 
+function textoCpuValido(texto) {
+  const valor = textoValido(texto);
+  if (!valor) return '';
+
+  const lower = valor.toLowerCase();
+
+  if (!lower.includes('intel') && !lower.includes('amd') && !lower.includes('celeron') && !lower.includes('ryzen')) {
+    return '';
+  }
+
+  if (lower.includes('http') || lower.includes('apirest') || lower.includes('entity')) return '';
+  if (valor.length > 90) return '';
+
+  return valor;
+}
+
+function extrairProcessadores(processadores) {
+  if (!Array.isArray(processadores)) return '-';
+
+  const encontrados = new Set();
+
+  for (const item of processadores) {
+    const candidatos = [
+      item?.designation,
+      item?.name,
+      item?.deviceprocessors_id,
+      item?.comment
+    ];
+
+    for (const candidato of candidatos) {
+      const texto = textoCpuValido(candidato);
+      if (texto) encontrados.add(texto);
+    }
+  }
+
+  return Array.from(encontrados).slice(0, 2).join(', ') || '-';
+}
+
 async function buscarDetalhesHardware(env, sessionToken, endpoint, id) {
   const [
-    processadores1,
-    processadores2,
-    memorias1,
-    memorias2,
+    processadores,
+    memorias,
     discosHardDrive,
     discosStorage,
     discosDrive,
@@ -391,18 +404,13 @@ async function buscarDetalhesHardware(env, sessionToken, endpoint, id) {
     discosVolume
   ] = await Promise.all([
     glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_DeviceProcessor`),
-    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/DeviceProcessor`),
     glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_DeviceMemory`),
-    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/DeviceMemory`),
     glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_DeviceHardDrive`),
     glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_DeviceStorage`),
     glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_DeviceDrive`),
     glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Disk`),
     glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Volume`)
   ]);
-
-  const processadores = juntarListas(processadores1, processadores2);
-  const memorias = juntarListas(memorias1, memorias2);
 
   const discosFisicos = juntarListas(discosHardDrive, discosStorage, discosDrive);
   const discosLogicos = juntarListas(discosDisk, discosVolume);
@@ -420,113 +428,92 @@ async function buscarDetalhesHardware(env, sessionToken, endpoint, id) {
   const discoLogicoTotal = somarDiscos(discosLogicos);
   const discoTotal = discoFisicoTotal || discoLogicoTotal;
 
-  const listaDiscosFallback = discoFisicoTotal ? discosFisicos : discosLogicos;
-
   return {
-    processador: extrairTextoLista(processadores, [
-      'designation',
-      'name',
-      'deviceprocessors_id',
-      'type'
-    ]) || '-',
+    processador: extrairProcessadores(processadores),
 
     memoria: memoriaTotal
       ? numeroParaGB(memoriaTotal)
-      : (extrairTextoLista(memorias, [
-          'size',
-          'capacity',
-          'memory',
-          'designation',
-          'name',
-          'devicememories_id'
-        ]) || '-'),
+      : '-',
 
     armazenamento: discoTotal
       ? numeroParaGB(discoTotal)
-      : (extrairTextoLista(listaDiscosFallback, [
-          'capacity',
-          'size',
-          'totalsize',
-          'total_size',
-          'disksize',
-          'logical_volume_size',
-          'harddrive_size',
-          'disk_size',
-          'volumesize',
-          'volume_size',
-          'designation',
-          'name',
-          'deviceharddrives_id',
-          'devicestorages_id'
-        ]) || '-')
+      : '-'
   };
 }
 
-function extrairNomesDeComputadores(obj) {
+function nomeComputadorValido(nome) {
+  const texto = textoValido(nome);
+  if (!texto) return '';
+
+  if (texto.includes('>')) return '';
+  if (texto.includes(',')) return '';
+  if (texto.length > 60) return '';
+
+  if (/^EXARADPC/i.test(texto)) return texto;
+  if (/^DESKTOP-/i.test(texto)) return texto;
+  if (/^NOTE/i.test(texto)) return texto;
+  if (/^PC[-_A-Z0-9]/i.test(texto)) return texto;
+
+  return '';
+}
+
+function extrairNomesComputadoresDasConexoes(obj) {
   const nomes = new Set();
 
   function visitar(valor) {
     if (!valor) return;
-
-    if (typeof valor === 'string') {
-      if (valor.trim()) nomes.add(valor.trim());
-      return;
-    }
 
     if (Array.isArray(valor)) {
       valor.forEach(visitar);
       return;
     }
 
-    if (typeof valor === 'object') {
-      const nome = primeiroTexto(
-        valor.name,
-        valor.completename,
-        valor.computer_name,
-        valor.item_name
-      );
+    if (typeof valor !== 'object') return;
 
-      if (nome && nome !== '-') {
-        nomes.add(nome);
-      }
+    const candidatos = [
+      valor.name,
+      valor.computer_name,
+      valor.item_name,
+      valor.items_name
+    ];
 
-      Object.values(valor).forEach(visitar);
+    for (const candidato of candidatos) {
+      const nome = nomeComputadorValido(candidato);
+      if (nome) nomes.add(nome);
     }
+
+    if (valor.itemtype === 'Computer' || valor.itemtype_1 === 'Computer' || valor.itemtype_2 === 'Computer') {
+      const nome = nomeComputadorValido(valor.name || valor.item_name || valor.items_name);
+      if (nome) nomes.add(nome);
+    }
+
+    Object.values(valor).forEach(visitar);
   }
 
   visitar(obj);
 
-  return Array.from(nomes)
-    .filter((nome) => nome && nome !== '0')
-    .join(', ');
+  return Array.from(nomes).join(', ');
 }
 
 async function buscarComputadorRelacionado(env, sessionToken, endpoint, id, item) {
-  const direto = primeiroTexto(
-    item.computers_id,
-    item.computer_id,
-    item.computer_name,
-    item.item_name
-  );
+  const idDireto = normalizarTexto(item.computers_id || item.computer_id);
 
-  if (direto !== '-') {
-    const possivelId = normalizarTexto(item.computers_id || item.computer_id || item.items_id);
-    if (possivelId && possivelId !== '0' && /^\d+$/.test(possivelId)) {
-      const computador = await glpiGetOpcional(env, sessionToken, `Computer/${possivelId}`);
-      return primeiroTexto(computador?.name, direto);
-    }
-
-    return direto;
+  if (idDireto && idDireto !== '0' && /^\d+$/.test(idDireto)) {
+    const computador = await glpiGetOpcional(env, sessionToken, `Computer/${idDireto}`);
+    const nome = nomeComputadorValido(computador?.name);
+    if (nome) return nome;
   }
+
+  const nomeDireto = nomeComputadorValido(item.computer_name || item.item_name);
+  if (nomeDireto) return nomeDireto;
 
   const conexoes = await Promise.all([
     glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Computer`),
     glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Connection`),
-    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_Computer`),
-    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Infocom`)
+    glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_Computer`)
   ]);
 
-  const nome = extrairNomesDeComputadores(conexoes);
+  const nome = extrairNomesComputadoresDasConexoes(conexoes);
   return nome || '-';
 }
 
