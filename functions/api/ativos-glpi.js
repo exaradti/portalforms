@@ -123,7 +123,6 @@ function ipValido(ip) {
 
   const partes = ip.split('.').map(Number);
   if (partes.some((parte) => parte < 0 || parte > 255)) return false;
-
   if (partes[3] === 0 || partes[3] === 255) return false;
 
   return true;
@@ -168,15 +167,10 @@ function numeroParaGB(valor) {
 
   let gb;
 
-  if (numero > 1073741824) {
-    gb = numero / 1073741824;
-  } else if (numero > 1048576) {
-    gb = numero / 1048576;
-  } else if (numero >= 1024) {
-    gb = numero / 1024;
-  } else {
-    gb = numero;
-  }
+  if (numero > 1073741824) gb = numero / 1073741824;
+  else if (numero > 1048576) gb = numero / 1048576;
+  else if (numero >= 1024) gb = numero / 1024;
+  else gb = numero;
 
   const arredondado = Math.round(gb * 10) / 10;
   return `${arredondado.toLocaleString('pt-BR')} GB`;
@@ -361,7 +355,12 @@ function textoCpuValido(texto) {
 
   const lower = valor.toLowerCase();
 
-  if (!lower.includes('intel') && !lower.includes('amd') && !lower.includes('celeron') && !lower.includes('ryzen')) {
+  if (
+    !lower.includes('intel') &&
+    !lower.includes('amd') &&
+    !lower.includes('celeron') &&
+    !lower.includes('ryzen')
+  ) {
     return '';
   }
 
@@ -430,14 +429,8 @@ async function buscarDetalhesHardware(env, sessionToken, endpoint, id) {
 
   return {
     processador: extrairProcessadores(processadores),
-
-    memoria: memoriaTotal
-      ? numeroParaGB(memoriaTotal)
-      : '-',
-
-    armazenamento: discoTotal
-      ? numeroParaGB(discoTotal)
-      : '-'
+    memoria: memoriaTotal ? numeroParaGB(memoriaTotal) : '-',
+    armazenamento: discoTotal ? numeroParaGB(discoTotal) : '-'
   };
 }
 
@@ -457,44 +450,6 @@ function nomeComputadorValido(nome) {
   return '';
 }
 
-function extrairNomesComputadoresDasConexoes(obj) {
-  const nomes = new Set();
-
-  function visitar(valor) {
-    if (!valor) return;
-
-    if (Array.isArray(valor)) {
-      valor.forEach(visitar);
-      return;
-    }
-
-    if (typeof valor !== 'object') return;
-
-    const candidatos = [
-      valor.name,
-      valor.computer_name,
-      valor.item_name,
-      valor.items_name
-    ];
-
-    for (const candidato of candidatos) {
-      const nome = nomeComputadorValido(candidato);
-      if (nome) nomes.add(nome);
-    }
-
-    if (valor.itemtype === 'Computer' || valor.itemtype_1 === 'Computer' || valor.itemtype_2 === 'Computer') {
-      const nome = nomeComputadorValido(valor.name || valor.item_name || valor.items_name);
-      if (nome) nomes.add(nome);
-    }
-
-    Object.values(valor).forEach(visitar);
-  }
-
-  visitar(obj);
-
-  return Array.from(nomes).join(', ');
-}
-
 async function buscarComputadorRelacionado(env, sessionToken, endpoint, id, item) {
   const nomes = new Set();
 
@@ -503,92 +458,97 @@ async function buscarComputadorRelacionado(env, sessionToken, endpoint, id, item
     if (nome) nomes.add(nome);
   }
 
-  async function buscarComputerPorId(compId) {
-    if (!compId || !/^\d+$/.test(String(compId))) return;
+  async function adicionarComputerPorId(compId) {
+    const idTexto = normalizarTexto(compId);
+    if (!idTexto || idTexto === '0' || !/^\d+$/.test(idTexto)) return;
 
-    const comp = await glpiGetOpcional(env, sessionToken, `Computer/${compId}`);
+    const comp = await glpiGetOpcional(env, sessionToken, `Computer/${idTexto}`);
     adicionarNome(comp?.name);
   }
 
-  // 1. Fonte principal: aba Conexões do monitor
-  const computadores = await glpiGetOpcional(
-    env,
-    sessionToken,
-    `${endpoint}/${id}/Computer`
-  );
+  function extrairIdsComputerDaRelacao(lista) {
+    const ids = new Set();
 
-  if (Array.isArray(computadores)) {
+    if (!Array.isArray(lista)) return ids;
+
+    for (const rel of lista) {
+      if (!rel || typeof rel !== 'object') continue;
+
+      const itemtype = normalizarTexto(
+        rel.itemtype ||
+        rel.item_type ||
+        rel.itemtype_1 ||
+        rel.itemtype_2
+      );
+
+      if (itemtype && itemtype !== 'Computer') {
+        continue;
+      }
+
+      const candidatos = [
+        rel.items_id,
+        rel.computers_id,
+        rel.computer_id,
+        rel.items_id_1,
+        rel.items_id_2
+      ];
+
+      for (const candidato of candidatos) {
+        const idCandidato = normalizarTexto(candidato);
+        if (idCandidato && idCandidato !== '0' && /^\d+$/.test(idCandidato)) {
+          ids.add(idCandidato);
+        }
+      }
+    }
+
+    return ids;
+  }
+
+  async function tentarRelacao(path) {
+    const relacoes = await glpiGetOpcional(env, sessionToken, path);
+    const ids = extrairIdsComputerDaRelacao(relacoes);
+
+    for (const compId of ids) {
+      await adicionarComputerPorId(compId);
+    }
+
+    if (nomes.size) return true;
+
+    if (Array.isArray(relacoes) && relacoes.length > 0 && relacoes.length <= 3) {
+      for (const rel of relacoes) {
+        adicionarNome(rel?.name);
+        adicionarNome(rel?.computer_name);
+        adicionarNome(rel?.item_name);
+        adicionarNome(rel?.items_name);
+      }
+    }
+
+    return nomes.size > 0;
+  }
+
+  if (await tentarRelacao(`${endpoint}/${id}/Item_Computer`)) {
+    return Array.from(nomes).join(', ');
+  }
+
+  if (await tentarRelacao(`${endpoint}/${id}/Connection`)) {
+    return Array.from(nomes).join(', ');
+  }
+
+  const computadores = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Computer`);
+
+  if (Array.isArray(computadores) && computadores.length > 0 && computadores.length <= 3) {
     for (const comp of computadores) {
       adicionarNome(comp?.name);
       adicionarNome(comp?.computer_name);
       adicionarNome(comp?.item_name);
 
-      const compId =
-        comp?.id ||
-        comp?.items_id ||
-        comp?.computers_id ||
-        comp?.computer_id;
-
-      await buscarComputerPorId(compId);
+      const compId = comp?.id || comp?.items_id || comp?.computers_id || comp?.computer_id;
+      await adicionarComputerPorId(compId);
     }
   }
 
-  // 2. Relação alternativa usada por algumas versões/configurações
-  const itemComputer = await glpiGetOpcional(
-    env,
-    sessionToken,
-    `${endpoint}/${id}/Item_Computer`
-  );
+  if (nomes.size) return Array.from(nomes).join(', ');
 
-  if (Array.isArray(itemComputer)) {
-    for (const rel of itemComputer) {
-      adicionarNome(rel?.name);
-      adicionarNome(rel?.computer_name);
-      adicionarNome(rel?.item_name);
-      adicionarNome(rel?.items_name);
-
-      const compId =
-        rel?.items_id ||
-        rel?.computers_id ||
-        rel?.computer_id;
-
-      await buscarComputerPorId(compId);
-    }
-  }
-
-  // 3. Relação genérica de conexão
-  const conexoes = await glpiGetOpcional(
-    env,
-    sessionToken,
-    `${endpoint}/${id}/Connection`
-  );
-
-  if (Array.isArray(conexoes)) {
-    for (const rel of conexoes) {
-      const ehComputador =
-        rel?.itemtype === 'Computer' ||
-        rel?.itemtype_1 === 'Computer' ||
-        rel?.itemtype_2 === 'Computer';
-
-      if (!ehComputador) continue;
-
-      adicionarNome(rel?.name);
-      adicionarNome(rel?.computer_name);
-      adicionarNome(rel?.item_name);
-      adicionarNome(rel?.items_name);
-
-      const compId =
-        rel?.items_id ||
-        rel?.computers_id ||
-        rel?.computer_id ||
-        rel?.items_id_1 ||
-        rel?.items_id_2;
-
-      await buscarComputerPorId(compId);
-    }
-  }
-
-  // 4. Fallback direto
   adicionarNome(item?.computer_name);
   adicionarNome(item?.item_name);
 
