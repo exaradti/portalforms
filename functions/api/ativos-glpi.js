@@ -510,8 +510,12 @@ async function buscarComputadorRelacionado(env, sessionToken, endpoint, id, item
     adicionarNome(comp?.name);
   }
 
-  // 1. Aba Conexões mais comum em monitores
-  const computadores = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Computer`);
+  // 1. Fonte principal: aba Conexões do monitor
+  const computadores = await glpiGetOpcional(
+    env,
+    sessionToken,
+    `${endpoint}/${id}/Computer`
+  );
 
   if (Array.isArray(computadores)) {
     for (const comp of computadores) {
@@ -529,36 +533,12 @@ async function buscarComputadorRelacionado(env, sessionToken, endpoint, id, item
     }
   }
 
-  // 2. Relação intermediária, dependendo da versão do GLPI
-  const conexoes = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Connection`);
-
-  if (Array.isArray(conexoes)) {
-    for (const rel of conexoes) {
-      if (
-        rel?.itemtype === 'Computer' ||
-        rel?.itemtype_1 === 'Computer' ||
-        rel?.itemtype_2 === 'Computer' ||
-        rel?.itemtype === 'ComputerModel'
-      ) {
-        adicionarNome(rel?.name);
-        adicionarNome(rel?.computer_name);
-        adicionarNome(rel?.item_name);
-        adicionarNome(rel?.items_name);
-
-        const compId =
-          rel?.items_id ||
-          rel?.computers_id ||
-          rel?.computer_id ||
-          rel?.items_id_1 ||
-          rel?.items_id_2;
-
-        await buscarComputerPorId(compId);
-      }
-    }
-  }
-
-  // 3. Alguns GLPI usam esse relacionamento
-  const itemComputer = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_Computer`);
+  // 2. Relação alternativa usada por algumas versões/configurações
+  const itemComputer = await glpiGetOpcional(
+    env,
+    sessionToken,
+    `${endpoint}/${id}/Item_Computer`
+  );
 
   if (Array.isArray(itemComputer)) {
     for (const rel of itemComputer) {
@@ -576,18 +556,43 @@ async function buscarComputadorRelacionado(env, sessionToken, endpoint, id, item
     }
   }
 
-  // 4. Fallback direto do próprio monitor
+  // 3. Relação genérica de conexão
+  const conexoes = await glpiGetOpcional(
+    env,
+    sessionToken,
+    `${endpoint}/${id}/Connection`
+  );
+
+  if (Array.isArray(conexoes)) {
+    for (const rel of conexoes) {
+      const ehComputador =
+        rel?.itemtype === 'Computer' ||
+        rel?.itemtype_1 === 'Computer' ||
+        rel?.itemtype_2 === 'Computer';
+
+      if (!ehComputador) continue;
+
+      adicionarNome(rel?.name);
+      adicionarNome(rel?.computer_name);
+      adicionarNome(rel?.item_name);
+      adicionarNome(rel?.items_name);
+
+      const compId =
+        rel?.items_id ||
+        rel?.computers_id ||
+        rel?.computer_id ||
+        rel?.items_id_1 ||
+        rel?.items_id_2;
+
+      await buscarComputerPorId(compId);
+    }
+  }
+
+  // 4. Fallback direto
   adicionarNome(item?.computer_name);
   adicionarNome(item?.item_name);
 
   return nomes.size ? Array.from(nomes).join(', ') : '-';
-}
-
-  // fallback simples (caso raro)
-  const nomeDireto = normalizarTexto(item.computer_name || item.item_name);
-  if (nomeDireto) return nomeDireto;
-
-  return '-';
 }
 
 async function buscarDetalheAtivo(env, sessionToken, tipo, id) {
