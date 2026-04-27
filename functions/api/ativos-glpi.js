@@ -496,31 +496,92 @@ function extrairNomesComputadoresDasConexoes(obj) {
 }
 
 async function buscarComputadorRelacionado(env, sessionToken, endpoint, id, item) {
-  // 🔥 Fonte correta: aba "Conexões" do GLPI
-  const relacoes = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_Computer`);
+  const nomes = new Set();
 
-  if (Array.isArray(relacoes) && relacoes.length) {
-    const nomes = [];
+  function adicionarNome(valor) {
+    const nome = nomeComputadorValido(valor);
+    if (nome) nomes.add(nome);
+  }
 
-    for (const rel of relacoes) {
-      // garante que é realmente ligação com computador
-      if (rel.itemtype === 'Computer' || rel.items_id) {
-        const compId = rel.items_id;
+  async function buscarComputerPorId(compId) {
+    if (!compId || !/^\d+$/.test(String(compId))) return;
 
-        if (compId && /^\d+$/.test(String(compId))) {
-          const comp = await glpiGetOpcional(env, sessionToken, `Computer/${compId}`);
+    const comp = await glpiGetOpcional(env, sessionToken, `Computer/${compId}`);
+    adicionarNome(comp?.name);
+  }
 
-          if (comp?.name) {
-            nomes.push(comp.name);
-          }
-        }
-      }
-    }
+  // 1. Aba Conexões mais comum em monitores
+  const computadores = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Computer`);
 
-    if (nomes.length) {
-      return nomes.join(', ');
+  if (Array.isArray(computadores)) {
+    for (const comp of computadores) {
+      adicionarNome(comp?.name);
+      adicionarNome(comp?.computer_name);
+      adicionarNome(comp?.item_name);
+
+      const compId =
+        comp?.id ||
+        comp?.items_id ||
+        comp?.computers_id ||
+        comp?.computer_id;
+
+      await buscarComputerPorId(compId);
     }
   }
+
+  // 2. Relação intermediária, dependendo da versão do GLPI
+  const conexoes = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Connection`);
+
+  if (Array.isArray(conexoes)) {
+    for (const rel of conexoes) {
+      if (
+        rel?.itemtype === 'Computer' ||
+        rel?.itemtype_1 === 'Computer' ||
+        rel?.itemtype_2 === 'Computer' ||
+        rel?.itemtype === 'ComputerModel'
+      ) {
+        adicionarNome(rel?.name);
+        adicionarNome(rel?.computer_name);
+        adicionarNome(rel?.item_name);
+        adicionarNome(rel?.items_name);
+
+        const compId =
+          rel?.items_id ||
+          rel?.computers_id ||
+          rel?.computer_id ||
+          rel?.items_id_1 ||
+          rel?.items_id_2;
+
+        await buscarComputerPorId(compId);
+      }
+    }
+  }
+
+  // 3. Alguns GLPI usam esse relacionamento
+  const itemComputer = await glpiGetOpcional(env, sessionToken, `${endpoint}/${id}/Item_Computer`);
+
+  if (Array.isArray(itemComputer)) {
+    for (const rel of itemComputer) {
+      adicionarNome(rel?.name);
+      adicionarNome(rel?.computer_name);
+      adicionarNome(rel?.item_name);
+      adicionarNome(rel?.items_name);
+
+      const compId =
+        rel?.items_id ||
+        rel?.computers_id ||
+        rel?.computer_id;
+
+      await buscarComputerPorId(compId);
+    }
+  }
+
+  // 4. Fallback direto do próprio monitor
+  adicionarNome(item?.computer_name);
+  adicionarNome(item?.item_name);
+
+  return nomes.size ? Array.from(nomes).join(', ') : '-';
+}
 
   // fallback simples (caso raro)
   const nomeDireto = normalizarTexto(item.computer_name || item.item_name);
